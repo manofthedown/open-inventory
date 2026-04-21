@@ -99,9 +99,24 @@ def upgrade() -> None:
     op.create_index(op.f("ix_product_cache_fetched_at"), "product_cache", ["fetched_at"], unique=False)
     op.create_index(op.f("ix_product_cache_gtin"), "product_cache", ["gtin"], unique=True)
 
+    # inventory_view: derived on-hand per item/location, sourced from the
+    # append-only movement log. DEVELOPMENT_PLAN.md §5.
+    op.execute(
+        """
+        CREATE VIEW inventory_view AS
+        SELECT
+            item_id,
+            location_id,
+            SUM(delta) AS on_hand
+        FROM movement
+        GROUP BY item_id, location_id
+        """
+    )
+
 
 def downgrade() -> None:
     """Drop all tables."""
+    op.execute("DROP VIEW IF EXISTS inventory_view")
     op.drop_index(op.f("ix_product_cache_gtin"), table_name="product_cache")
     op.drop_index(op.f("ix_product_cache_fetched_at"), table_name="product_cache")
     op.drop_table("product_cache")
