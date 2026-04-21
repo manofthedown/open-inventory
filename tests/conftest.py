@@ -74,8 +74,14 @@ def session(engine: Engine) -> Iterator[Session]:
 
 
 @pytest.fixture
-def app(settings: Settings):  # type: ignore[no-untyped-def]
-    """Create FastAPI test app."""
+def app(settings: Settings, engine: Engine):  # type: ignore[no-untyped-def]
+    """Create a FastAPI test app bound to a migrated temp DB.
+
+    Depends on ``engine`` so the schema is guaranteed to exist and the
+    default ``Main`` location is seeded. The app instance itself will
+    call ``init_engine(settings)`` again — both engines point at the
+    same SQLite file (the one in ``temp_db``), so there's no bleed.
+    """
     return create_app(settings)
 
 
