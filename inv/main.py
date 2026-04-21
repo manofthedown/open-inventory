@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 
 from inv import __version__
 from inv.api.routes_export import router as export_router
+from inv.api.routes_health import router as health_router
 from inv.api.routes_inventory import router as inventory_router
 from inv.api.routes_items import router as items_router
 from inv.api.routes_scan import router as scan_router
@@ -47,27 +48,13 @@ def create_app(settings: Settings) -> FastAPI:
     # Serve vendored HTMX / Alpine / Pico from inv/web/static/.
     mount_static(app)
 
-    @app.get("/health", tags=["system"])
-    async def health() -> dict:
-        """Health check endpoint."""
-        return {"status": "ok", "version": __version__}
-
-    @app.get("/version", tags=["system"])
-    async def version() -> dict:
-        """Version endpoint."""
-        return {"version": __version__}
-
     @app.get("/", response_class=HTMLResponse, tags=["system"])
     async def index(request: Request) -> HTMLResponse:
-        """Render the base template as the M1 landing page.
-
-        M2 will replace this with the scan page. For now the page exists
-        so that `/` is a valid entry point, static assets are exercised,
-        and we don't 404 the user on first visit.
-        """
+        """Render the base template as the landing page."""
         return templates.TemplateResponse(request, "base.html", {"version": __version__})
 
-    # Register routers
+    # Register all routers — one line per module, in dependency order.
+    app.include_router(health_router)
     app.include_router(scan_router)
     app.include_router(items_router)
     app.include_router(inventory_router)
