@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}open-inventory{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/alpine.min.js"></script>
+</head>
+<body>
+    <main>
+        <header>
+            <h1><a href="/">open-inventory</a></h1>
+            <nav>
+                <ul>
+                    <li><a href="/scan">Scan</a></li>
+                    <li><a href="/inventory">Inventory</a></li>
+                    <li><a href="/items">Items</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/js/scan_focus.js"></script>
+</body>
+</html>
