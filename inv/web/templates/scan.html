@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Scan — open-inventory{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Inventory Scanner</h2>
+
+    <form hx-post="/scan" hx-target="#scan-result" hx-swap="innerHTML swap:1s">
+        <fieldset>
+            <legend>Scan Mode</legend>
+            <div>
+                <label>
+                    <input type="radio" name="qty_multiplier" value="1" checked>
+                    Each (×1)
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="radio" name="qty_multiplier" value="12">
+                    Case (×12)
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="radio" name="qty_multiplier" value="6">
+                    Cluster (×6)
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="radio" name="qty_multiplier" value="custom">
+                    Custom:
+                    <input type="number" name="custom_multiplier" id="custom-multiplier" value="1" min="1" style="width: 80px;">
+                </label>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Direction</legend>
+            <div>
+                <label>
+                    <input type="radio" name="direction" value="IN" checked>
+                    Scan In
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="radio" name="direction" value="OUT">
+                    Scan Out
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="radio" name="direction" value="ADJUST">
+                    Adjust
+                </label>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Barcode</legend>
+            <input
+                type="text"
+                id="scan-input"
+                name="gtin"
+                placeholder="Scan a barcode or enter GTIN..."
+                autofocus
+                required
+                style="font-size: 1.2em; padding: 0.8em;"
+            >
+        </fieldset>
+
+        <input type="hidden" name="location_id" value="1">
+    </form>
+
+    <div id="scan-result" style="margin-top: 2em; min-height: 80px;">
+        <!-- HTMX partial responses will land here -->
+    </div>
+
+    <hr>
+
+    <h3>Last Scans</h3>
+    <div id="scan-history" style="border: 1px solid #ddd; padding: 1em; border-radius: 0.5em; max-height: 200px; overflow-y: auto;">
+        <p style="color: #999; text-align: center;">Scans appear here...</p>
+    </div>
+</section>
+
+<script>
+/**
+ * Custom qty_multiplier logic:
+ * If the user selects "Custom", grab the value from the custom input.
+ * Otherwise use the selected radio value directly.
+ */
+document.addEventListener('htmx:beforeSend', function(evt) {
+    if (evt.detail.xhr.method === 'POST') {
+        const form = evt.detail.xhr.request.target;
+        const selectedMode = document.querySelector('input[name="qty_multiplier"]:checked');
+        if (selectedMode && selectedMode.value === 'custom') {
+            const customInput = document.getElementById('custom-multiplier');
+            // Overwrite the form data
+            evt.detail.parameters.qty_multiplier = parseInt(customInput.value) || 1;
+        } else if (selectedMode) {
+            evt.detail.parameters.qty_multiplier = parseInt(selectedMode.value) || 1;
+        }
+    }
+});
+
+/**
+ * Re-focus the scan input after each HTMX swap so scanning continues uninterrupted.
+ */
+document.addEventListener('htmx:afterSwap', function(evt) {
+    const scanInput = document.getElementById('scan-input');
+    if (scanInput) {
+        scanInput.focus();
+        scanInput.select();  // Select all text so next scan overwrites it
+    }
+});
+
+/**
+ * On form submit, clear the input so it's ready for the next scan.
+ */
+document.querySelector('form').addEventListener('htmx:beforeRequest', function(evt) {
+    const scanInput = document.getElementById('scan-input');
+    if (scanInput) {
+        scanInput.value = '';
+    }
+});
+</script>
+{% endblock %}

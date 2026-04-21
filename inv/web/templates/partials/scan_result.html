@@ -1,0 +1,46 @@
+{% if item %}
+<article style="background: #f0f8ff; padding: 1.5em; border-radius: 0.5em; border-left: 4px solid #0066cc;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em;">
+        <div>
+            <h4 style="margin: 0; color: #0066cc;">{{ item.name or item.gtin }}</h4>
+            {% if item.brand %}
+            <p style="margin: 0.5em 0 0 0; color: #666; font-size: 0.9em;">{{ item.brand }}</p>
+            {% endif %}
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 2em; font-weight: bold; color: #0066cc;">{{ on_hand }}</div>
+            <div style="font-size: 0.9em; color: #666;">on hand</div>
+        </div>
+    </div>
+
+    <div style="margin-top: 1em; padding-top: 1em; border-top: 1px solid #ddd; font-size: 0.9em;">
+        <strong>{{ message }}</strong>
+        <br>
+        <span style="color: #666;">GTIN: {{ item.gtin }}</span>
+    </div>
+</article>
+
+<!-- Add to scan history -->
+<script>
+const historyDiv = document.getElementById('scan-history');
+if (historyDiv) {
+    const entry = document.createElement('div');
+    entry.style.padding = '0.5em';
+    entry.style.borderBottom = '1px solid #eee';
+    entry.style.fontSize = '0.85em';
+    const absDelta = Math.abs({{ delta }});
+    entry.innerHTML = '<strong>' + '{{ item.name or item.gtin }}' + '</strong><br>' +
+                      '<span style="color: #666;">' + '{{ direction }}' + ' ×' + absDelta + ', on-hand: ' + '{{ on_hand }}' + '</span>';
+    historyDiv.insertBefore(entry, historyDiv.firstChild);
+
+    // Keep only last 10 entries
+    while (historyDiv.children.length > 10) {
+        historyDiv.removeChild(historyDiv.lastChild);
+    }
+}
+</script>
+{% else %}
+<div style="color: #cc0000; padding: 1em; background: #ffe0e0; border-radius: 0.5em;">
+    <strong>Error:</strong> {{ message }}
+</div>
+{% endif %}
