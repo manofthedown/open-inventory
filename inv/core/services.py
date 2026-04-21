@@ -92,6 +92,7 @@ def record_scan(
     actor: str | None = None,
     note: str | None = None,
     lookup_result: object | None = None,
+    attempted_providers: tuple[str, ...] = (),
 ) -> ScanResult:
     """Record a barcode scan and update inventory.
 
@@ -116,6 +117,11 @@ def record_scan(
             newly-created item the fields are applied immediately so the
             item is enriched in the same transaction as the movement.
             Pass ``None`` to leave the item as a plain stub.
+        attempted_providers: Ordered tuple of provider names tried by
+            ``ChainRunner`` before giving up. Passed through to
+            ``ScanUnknownEvent`` so subscribers receive accurate
+            diagnostics. Empty tuple on cache hits or when the caller
+            did not run the chain (e.g. re-scans of known GTINs).
 
     Returns:
         ScanResult with movement details and current on-hand.
@@ -198,7 +204,7 @@ def record_scan(
                 "record_scan",
                 event=ScanUnknownEvent(
                     gtin=gtin,
-                    attempted_providers=(),
+                    attempted_providers=attempted_providers,
                 ),
             )
 

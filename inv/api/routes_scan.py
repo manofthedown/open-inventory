@@ -90,9 +90,12 @@ async def post_scan(
     is_new_gtin = item_repo.get_by_gtin(effective_gtin) is None
 
     lookup_result = None
+    attempted_providers: tuple[str, ...] = ()
     if is_new_gtin:
         chain = ChainRunner(session)
-        lookup_result = await chain.run(effective_gtin)
+        chain_result = await chain.run(effective_gtin)
+        lookup_result = chain_result.result
+        attempted_providers = chain_result.attempted_providers
 
     # Step 3: record the movement.
     try:
@@ -105,6 +108,7 @@ async def post_scan(
             actor=req.actor,
             note=req.note,
             lookup_result=lookup_result,
+            attempted_providers=attempted_providers,
         )
     except LocationNotFoundError as e:
         raise HTTPException(

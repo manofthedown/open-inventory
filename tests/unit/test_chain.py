@@ -270,7 +270,11 @@ def test_cache_store_and_hit(session: Session) -> None:
 
 @respx.mock
 async def test_chain_returns_first_hit(session: Session) -> None:
-    """ChainRunner stops at the first provider hit (OFF) and writes to cache."""
+    """ChainRunner stops at the first provider hit (OFF) and writes to cache.
+
+    ChainResult.result is the ProviderResult; attempted_providers contains
+    every provider called up to and including the hit.
+    """
     gtin = "3017620422003"
     payload = _load("openfoodfacts_hit.json")
     respx.get(f"https://world.openfoodfacts.org/api/v2/product/{gtin}.json").mock(
@@ -278,11 +282,13 @@ async def test_chain_returns_first_hit(session: Session) -> None:
     )
 
     chain = ChainRunner(session)
-    result = await chain.run(gtin)
+    chain_result = await chain.run(gtin)
 
-    assert result is not None
-    assert result.provider == "openfoodfacts"
-    assert result.name == "Nutella"
+    assert chain_result.result is not None
+    assert chain_result.result.provider == "openfoodfacts"
+    assert chain_result.result.name == "Nutella"
+    # OFF is the first network provider; attempted should contain it
+    assert "openfoodfacts" in chain_result.attempted_providers
 
     # Verify written to cache
     cache = CacheProvider(session)
@@ -293,7 +299,7 @@ async def test_chain_returns_first_hit(session: Session) -> None:
 
 @respx.mock
 async def test_chain_cache_hit_skips_network(session: Session) -> None:
-    """A pre-seeded cache entry is returned without any network provider being called."""
+    """A pre-seeded cache entry is returned; attempted_providers is empty."""
     gtin = "3017620422003"
 
     # Pre-seed the cache
@@ -305,31 +311,38 @@ async def test_chain_cache_hit_skips_network(session: Session) -> None:
 
     # No network routes registered — if the chain hits the network, respx will raise
     chain = ChainRunner(session)
-    result = await chain.run(gtin)
+    chain_result = await chain.run(gtin)
 
-    assert result is not None
-    assert result.name == "Cached Nutella"
+    assert chain_result.result is not None
+    assert chain_result.result.name == "Cached Nutella"
+    # Cache hit — no network providers were tried
+    assert chain_result.attempted_providers == ()
 
 
 @respx.mock
 async def test_chain_all_miss_returns_none(session: Session) -> None:
-    """ChainRunner returns None when every provider misses."""
+    """ChainRunner returns result=None with all provider names on total miss."""
     gtin = "0000000000000"
 
     # OFF miss
     respx.get(f"https://world.openfoodfacts.org/api/v2/product/{gtin}.json").mock(
         return_value=Response(200, json={"status": 0, "code": gtin})
     )
-    # Open Library: not an ISBN — skipped automatically
+    # Open Library: not an ISBN — skipped automatically (but still attempted)
     # OpenGTINdb: always None
-    # UPCitemdb: 13-digit non-zero-prefixed — skipped
+    # UPCitemdb: 13-digit non-zero-prefixed — skipped (but still attempted)
     chain = ChainRunner(session)
-    result = await chain.run(gtin)
-    assert result is None
+    chain_result = await chain.run(gtin)
+
+    assert chain_result.result is None
+    # All four network providers were attempted even though most skip internally
+    assert chain_result.attempted_providers == (
+        "openfoodfacts", "openlibrary", "opengtindb", "upcitemdb"
+    )
 
 
 async def test_chain_provider_timeout_returns_none(session: Session) -> None:
-    """A provider that times out is swallowed and the chain continues."""
+    """A provider that times out is swallowed; its name appears in attempted_providers."""
     import asyncio
 
     async def _slow_lookup(_gtin: str) -> ProviderResult | None:
@@ -342,10 +355,9 @@ async def test_chain_provider_timeout_returns_none(session: Session) -> None:
         async def lookup(self, gtin: str) -> ProviderResult | None:
             return await _slow_lookup(gtin)
 
-    # Chain with only the slow provider and a tiny timeout
     chain = ChainRunner(session, provider_timeout=0.01, extra_providers=[SlowProvider()])
-    # Override built-in providers with empty list for this test
     chain._network_providers = [SlowProvider()]
 
-    result = await chain.run("1234567890123")
-    assert result is None
+    chain_result = await chain.run("1234567890123")
+    assert chain_result.result is None
+    assert chain_result.attempted_providers == ("slow",)
