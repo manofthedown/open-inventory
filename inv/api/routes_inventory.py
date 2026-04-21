@@ -28,9 +28,10 @@ async def get_inventory(
     """Render the inventory on-hand view.
 
     Queries the ``inventory_view`` SQL VIEW (created by the baseline
-    migration) and joins item + location names. Returns rows only where
-    ``on_hand != 0`` by default so zero-stock items don't clutter the
-    view. The last movement timestamp is fetched per item/location pair.
+    migration) and joins item + location names. Only rows where
+    ``on_hand > 0`` are returned — fully depleted items are not shown
+    here (they remain visible on ``/items`` and in the CSV export).
+    The last movement timestamp is fetched per item/location pair.
     """
     rows = session.execute(
         text("""
@@ -52,6 +53,7 @@ async def get_inventory(
             FROM inventory_view v
             JOIN item     i ON i.id = v.item_id
             JOIN location l ON l.id = v.location_id
+            WHERE v.on_hand > 0
             ORDER BY l.name, i.name NULLS LAST, i.gtin
         """)
     ).mappings().all()
