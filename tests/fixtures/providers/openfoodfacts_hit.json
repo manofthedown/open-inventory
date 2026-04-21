@@ -1,0 +1,13 @@
+{
+  "code": "3017620422003",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Nutella",
+    "product_name_en": "Nutella",
+    "brands": "Nutella",
+    "categories": "Spreads, Sweet spreads, Hazelnut spreads",
+    "quantity": "400 g e",
+    "nutriments": {}
+  }
+}
