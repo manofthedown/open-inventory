@@ -1,0 +1,100 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-inventory"
+version = "0.1.0"
+description = "A lightweight, modular, offline-first barcode scan-in / scan-out inventory system for mutual aid and emergency management"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Open Inventory Contributors" }
+]
+keywords = ["inventory", "barcode", "scanner", "mutual-aid", "offline"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "platformdirs>=4.0.0",
+    "structlog>=24.1.0",
+    "blinker>=1.7.0",
+    "jinja2>=3.1.0",
+    "typer>=0.9.0",
+]
+
+[project.scripts]
+inventory = "inv.cli:main"
+
+# Development dependencies live in a PEP 735 dependency group so
+# `uv sync --frozen` installs them automatically (uv's default groups
+# include `dev`). Keeping them out of `[project.optional-dependencies]`
+# means they never bleed into the published wheel's metadata.
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "respx>=0.20.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["inv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+]
+ignore = ["E501"]  # line too long (handled by formatter)
+
+[tool.ruff.lint.isort]
+known-first-party = ["inv"]
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+no_implicit_optional = true
+warn_return_any = true
+exclude = ["alembic"]
+
+[[tool.mypy.overrides]]
+module = [
+    "uvicorn.*",
+]
+ignore_missing_imports = true
