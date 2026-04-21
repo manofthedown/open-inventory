@@ -1,16 +1,18 @@
 """Pytest configuration and fixtures."""
 
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from inv.main import create_app
 from inv.settings import Settings
-from inv.storage.orm import Base
+from inv.storage.db import init_engine
+from inv.storage.migrations import upgrade_to_head
 
 
 @pytest.fixture
@@ -33,33 +35,32 @@ def settings(temp_db: Path) -> Settings:
 
 
 @pytest.fixture
-def engine(settings: Settings):
-    """Create SQLAlchemy engine."""
-    engine = create_engine(f"sqlite:///{settings.db_path}")
-    Base.metadata.create_all(engine)
+def engine(settings: Settings) -> Iterator[Engine]:
+    """Create SQLAlchemy engine with schema migrated via Alembic.
 
-    # Insert default location
+    Tests go through the same migration path as production so ORM/migration
+    drift is caught immediately.
+    """
+    upgrade_to_head(settings)
+    engine = init_engine(settings)
+
+    # Seed the default Main location (same as `inventory init`)
     SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
-    try:
+    with SessionLocal() as session:
         from inv.storage.orm import Location
 
         default_location = Location(name="Main", notes="Default storage location")
         session.add(default_location)
         session.commit()
-    finally:
-        session.close()
 
     yield engine
 
-    # Cleanup
-    Base.metadata.drop_all(engine)
     engine.dispose()
 
 
 @pytest.fixture
-def session(engine):
-    """Create a database session for testing."""
+def session(engine: Engine) -> Iterator[Session]:
+    """Create a database session bound to a rolled-back transaction."""
     connection = engine.connect()
     transaction = connection.begin()
     SessionLocal = sessionmaker(bind=connection)
@@ -73,12 +74,12 @@ def session(engine):
 
 
 @pytest.fixture
-def app(settings: Settings):
+def app(settings: Settings):  # type: ignore[no-untyped-def]
     """Create FastAPI test app."""
     return create_app(settings)
 
 
 @pytest.fixture
-def client(app):
+def client(app) -> TestClient:  # type: ignore[no-untyped-def]
     """Create FastAPI test client."""
     return TestClient(app)

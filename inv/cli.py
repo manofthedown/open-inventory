@@ -7,7 +7,7 @@ import typer
 from inv import __version__
 from inv.settings import AppDirs, get_settings
 from inv.storage.db import init_engine
-from inv.storage.orm import Base
+from inv.storage.migrations import upgrade_to_head
 
 app = typer.Typer(help="open-inventory — lightweight barcode inventory system")
 
@@ -16,6 +16,7 @@ app = typer.Typer(help="open-inventory — lightweight barcode inventory system"
 def init() -> None:
     """Initialize the database and configuration directories."""
     settings = get_settings()
+    AppDirs.ensure_dirs()
     db_path = settings.db_path
 
     typer.echo("Initializing open-inventory...")
@@ -25,9 +26,14 @@ def init() -> None:
     typer.echo(f"  Logs: {AppDirs.log_dir()}")
     typer.echo(f"  Database: {db_path}")
 
-    # Create engine and initialize schema
+    # Schema is managed exclusively through Alembic so every environment
+    # (dev, test, prod) has a matching `alembic_version` row. Idempotent:
+    # running `inventory init` twice no-ops on the second call.
+    upgrade_to_head(settings)
+    typer.echo("  Schema migrated to head")
+
+    # Engine is needed for the post-migration seed insert below.
     engine = init_engine(settings)
-    Base.metadata.create_all(engine)
 
     # Insert default location if it doesn't exist
     from sqlalchemy.orm import Session
@@ -44,7 +50,7 @@ def init() -> None:
         else:
             typer.echo("  Default location 'Main' already exists")
 
-    typer.echo("✓ Initialization complete!")
+    typer.echo("Initialization complete.")
 
 
 @app.command()

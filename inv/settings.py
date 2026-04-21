@@ -72,12 +72,13 @@ class Settings(BaseSettings):
         # Default: use XDG data directory
         return AppDirs.data_dir() / "inventory.db"
 
-    def __init__(self, **data):  # type: ignore
-        """Initialize settings and ensure directories exist."""
-        super().__init__(**data)
-        AppDirs.ensure_dirs()
-
 
 def get_settings() -> Settings:
-    """Get the global settings instance."""
+    """Get the global settings instance.
+
+    ``AppDirs.ensure_dirs()`` is intentionally NOT called here — directory
+    creation is a side effect reserved for ``inventory init``. Importing
+    ``Settings`` must remain free of filesystem writes so tests and
+    ``alembic`` invocations don't leak XDG dirs.
+    """
     return Settings()
