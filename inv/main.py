@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from inv import __version__
+from inv.api.routes_export import router as export_router
+from inv.api.routes_inventory import router as inventory_router
 from inv.api.routes_items import router as items_router
 from inv.api.routes_scan import router as scan_router
 from inv.settings import Settings
@@ -68,5 +70,7 @@ def create_app(settings: Settings) -> FastAPI:
     # Register routers
     app.include_router(scan_router)
     app.include_router(items_router)
+    app.include_router(inventory_router)
+    app.include_router(export_router)
 
     return app

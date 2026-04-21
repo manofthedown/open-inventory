@@ -1,9 +1,11 @@
-"""Items routes — list, detail, and manual enrichment form.
+"""Items routes — list, detail, enrichment form, and pack alias CRUD.
 
 Covers:
-  GET  /items                — paginated item list, optional ?filter=needs_review
-  GET  /items/{id}/enrich   — render the enrichment form
-  POST /items/{id}/enrich   — submit enrichment; clears needs_review flag
+  GET  /items                          — item list, optional ?filter=needs_review
+  GET  /items/{id}/enrich              — render enrichment form (with alias list)
+  POST /items/{id}/enrich              — submit enrichment; clears needs_review
+  POST /items/{id}/aliases             — add a pack alias
+  POST /items/{id}/aliases/{gtin}/delete — remove a pack alias
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from sqlalchemy.orm import Session
 from inv.api.deps import get_session
 from inv.core.services import enrich_item
 from inv.storage.orm import Item
-from inv.storage.repositories import ItemRepository
+from inv.storage.repositories import AliasRepository, ItemRepository
 from inv.web import templates
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -54,14 +56,15 @@ async def get_enrich_form(
     repo = ItemRepository(session)
     item = repo.get_by_id(item_id)
     if item is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Item {item_id} not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {item_id} not found")
+
+    alias_repo = AliasRepository(session)
+    aliases = alias_repo.list_for_item(item_id)
+
     return templates.TemplateResponse(
         request,
         "enrich_form.html",
-        {"item": item, "message": None},
+        {"item": item, "aliases": aliases, "message": None},
     )
 
 
@@ -77,16 +80,11 @@ async def post_enrich_form(
 ) -> RedirectResponse:
     """Submit enrichment data for an item and clear its needs_review flag.
 
-    Redirects to the items list on success so a re-POST on refresh is
-    avoided (Post/Redirect/Get pattern).
+    Redirects to /items on success (Post/Redirect/Get).
     """
     repo = ItemRepository(session)
-    item = repo.get_by_id(item_id)
-    if item is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Item {item_id} not found",
-        )
+    if repo.get_by_id(item_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {item_id} not found")
 
     try:
         enrich_item(
@@ -98,9 +96,75 @@ async def post_enrich_form(
             note=note.strip() or None,
         )
     except KeyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     return RedirectResponse(url="/items", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/{item_id}/aliases")
+async def add_alias(
+    item_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    alias_gtin: Annotated[str, Form(min_length=6, max_length=14)],
+    multiplier: Annotated[int, Form(ge=2, le=10000)],
+    label: Annotated[str, Form(max_length=100)] = "",
+) -> RedirectResponse:
+    """Register a new pack alias for an item.
+
+    The alias GTIN must not already exist (either as an item GTIN or
+    another alias). Redirects back to the enrichment form on success.
+    """
+    repo = ItemRepository(session)
+    if repo.get_by_id(item_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {item_id} not found")
+
+    alias_repo = AliasRepository(session)
+
+    # Guard: alias GTIN must not conflict with an existing item GTIN
+    if repo.get_by_gtin(alias_gtin) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"GTIN {alias_gtin} already exists as a canonical item",
+        )
+    # Guard: alias GTIN must not already be registered
+    if alias_repo.get_by_gtin(alias_gtin) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Alias GTIN {alias_gtin} is already registered",
+        )
+
+    alias_repo.create(
+        gtin=alias_gtin,
+        item_id=item_id,
+        multiplier=multiplier,
+        label=label.strip() or None,
+    )
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/items/{item_id}/enrich", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.post("/{item_id}/aliases/{alias_gtin}/delete")
+async def delete_alias(
+    item_id: int,
+    alias_gtin: str,
+    session: Annotated[Session, Depends(get_session)],
+) -> RedirectResponse:
+    """Delete a pack alias. Redirects back to the enrichment form."""
+    repo = ItemRepository(session)
+    if repo.get_by_id(item_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {item_id} not found")
+
+    alias_repo = AliasRepository(session)
+    if not alias_repo.delete(alias_gtin):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alias {alias_gtin} not found",
+        )
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/items/{item_id}/enrich", status_code=status.HTTP_303_SEE_OTHER
+    )

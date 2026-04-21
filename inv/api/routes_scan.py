@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from inv.api.deps import get_session
+from inv.core.packs import resolve_alias
 from inv.core.services import (
     LocationNotFoundError,
     NegativeStockError,
@@ -58,10 +59,14 @@ async def post_scan(
 ) -> HTMLResponse:
     """Record a barcode scan and update inventory.
 
-    On first sight of a GTIN the lookup chain runs (cache → OFF →
-    Open Library → OpenGTINdb → UPCitemdb). A hit enriches the item
-    stub in the same transaction; a miss leaves it flagged
-    ``needs_review=True``.
+    Processing order:
+    1. Resolve pack alias — if the scanned GTIN is a registered case/inner
+       barcode, rewrite to the canonical item GTIN and apply the alias
+       multiplier (overriding the operator's qty_multiplier).
+    2. Run the provider chain (cache → OFF → Open Library → OpenGTINdb →
+       UPCitemdb) only for first-seen canonical GTINs.
+    3. Call record_scan with the resolved GTIN, effective multiplier, and
+       any lookup result.
 
     Returns an HTML partial for HTMX/fetch clients. Errors use standard
     HTTP status codes with JSON ``{"detail": "..."}`` bodies:
@@ -71,26 +76,31 @@ async def post_scan(
     - 422: Validation error (bad direction, empty GTIN, non-positive
            qty_multiplier, etc.) — emitted by Pydantic automatically.
     """
-    # Run the provider chain only for first-seen GTINs. We peek at the
-    # DB first; if the item already exists we skip the network round-trip
-    # entirely (the chain would just hit the cache anyway, but this is
-    # cheaper and keeps the fast path fast).
+    # Step 1: pack alias resolution — rewrites GTIN + multiplier if matched.
+    resolution = resolve_alias(session, req.gtin)
+    effective_gtin = resolution.canonical_gtin
+    effective_multiplier = (
+        resolution.multiplier if resolution.was_alias else req.qty_multiplier
+    )
+
+    # Step 2: provider chain — only for first-seen canonical GTINs.
     from inv.storage.repositories import ItemRepository
 
     item_repo = ItemRepository(session)
-    is_new_gtin = item_repo.get_by_gtin(req.gtin) is None
+    is_new_gtin = item_repo.get_by_gtin(effective_gtin) is None
 
     lookup_result = None
     if is_new_gtin:
         chain = ChainRunner(session)
-        lookup_result = await chain.run(req.gtin)
+        lookup_result = await chain.run(effective_gtin)
 
+    # Step 3: record the movement.
     try:
         result = record_scan(
             session,
-            gtin=req.gtin,
+            gtin=effective_gtin,
             direction=req.direction,
-            qty_multiplier=req.qty_multiplier,
+            qty_multiplier=effective_multiplier,
             location_id=req.location_id,
             actor=req.actor,
             note=req.note,
@@ -107,10 +117,14 @@ async def post_scan(
             detail=str(e),
         ) from e
 
-    # Construct human-readable message
+    # Build human-readable message; note alias auto-multiply if applicable.
     verb = {"IN": "Scanned in", "OUT": "Scanned out", "ADJUST": "Adjusted"}[req.direction]
     item_label = result.item.name or result.item.gtin
-    message = f"{verb} {req.qty_multiplier} × {item_label}"
+    if resolution.was_alias:
+        alias_tag = f" via {resolution.alias_label or 'alias'} ×{resolution.multiplier}"
+    else:
+        alias_tag = ""
+    message = f"{verb} {effective_multiplier} × {item_label}{alias_tag}"
 
     context = {
         "item": result.item,
@@ -118,5 +132,6 @@ async def post_scan(
         "direction": req.direction,
         "delta": result.delta,
         "message": message,
+        "was_alias": resolution.was_alias,
     }
     return templates.TemplateResponse(request, "partials/scan_result.html", context)

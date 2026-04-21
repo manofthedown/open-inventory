@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory — open-inventory{% endblock %}
+
+{% block content %}
+<section>
+    <hgroup>
+        <h2>Inventory</h2>
+        <p>
+            Current on-hand by item and location.
+            <a href="/export/items.csv">Export items CSV</a> ·
+            <a href="/export/movements.csv">Export movements CSV</a>
+        </p>
+    </hgroup>
+
+    {% if rows %}
+    <div class="overflow-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>GTIN</th>
+                    <th>Name</th>
+                    <th>Brand</th>
+                    <th>On hand</th>
+                    <th>Last movement</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.location_name }}</td>
+                    <td><code>{{ row.gtin }}</code></td>
+                    <td>
+                        {{ row.name or "—" }}
+                        {% if row.needs_review %}
+                        <small><mark>needs review</mark></small>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.brand or "—" }}</td>
+                    <td><strong>{{ row.on_hand }}</strong></td>
+                    <td>
+                        {% if row.last_movement_at %}
+                        <small>{{ row.last_movement_at }}</small>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/items/{{ row.item_id }}/enrich" role="button" class="outline">Enrich</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No inventory yet. <a href="/scan">Scan some items</a> to get started.</p>
+    {% endif %}
+</section>
+{% endblock %}
