@@ -10,7 +10,6 @@ repos:
     rev: v1.7.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-httpx]
         exclude: ^alembic
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

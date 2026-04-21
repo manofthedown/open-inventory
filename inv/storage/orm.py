@@ -1,6 +1,6 @@
 """SQLAlchemy 2.x ORM models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, CheckConstraint, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -28,8 +28,10 @@ class Item(Base):
     meta_data: Mapped[dict | None] = mapped_column(JSON, name="metadata")
     source: Mapped[str | None] = mapped_column(String(100))
     needs_review: Mapped[bool] = mapped_column(default=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     movements: Mapped[list["Movement"]] = relationship(
@@ -69,7 +71,7 @@ class Movement(Base):
     direction: Mapped[str] = mapped_column(String(10), nullable=False)  # IN, OUT, ADJUST
     actor: Mapped[str | None] = mapped_column(String(255))
     note: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), index=True)
 
     # Relationships
     item: Mapped[Item] = relationship(back_populates="movements")
@@ -98,4 +100,4 @@ class ProductCache(Base):
     gtin: Mapped[str] = mapped_column(String(14), primary_key=True, index=True)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
-    fetched_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, index=True)
+    fetched_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), index=True)

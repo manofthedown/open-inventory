@@ -136,19 +136,7 @@ async function submitScan() {
         
         if (response.ok) {
             const html = await response.text();
-            const resultDiv = document.getElementById('scan-result');
-            resultDiv.innerHTML = html;
-            
-            // Execute any scripts in the response
-            const scripts = resultDiv.querySelectorAll('script');
-            scripts.forEach(script => {
-                const newScript = document.createElement('script');
-                newScript.textContent = script.textContent;
-                resultDiv.appendChild(newScript);
-            });
-            
-            // Trigger HTMX swap animation
-            htmx.process(resultDiv);
+            document.getElementById('scan-result').innerHTML = html;
         } else {
             const errorText = await response.text();
             let errorMessage = `Error ${response.status}`;
@@ -167,18 +155,9 @@ async function submitScan() {
         document.getElementById('scan-result').innerHTML = `<div style="color: red; padding: 1em;">Network error: ${error.message}</div>`;
     }
     
-    // Clear input for next scan
+    // Clear input and re-focus so the next scan is immediately ready.
     scanInput.value = '';
+    scanInput.focus();
 }
-
-/**
- * Re-focus the scan input after HTMX response, so scanning continues uninterrupted.
- */
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    const scanInput = document.getElementById('scan-input');
-    if (scanInput) {
-        scanInput.focus();
-    }
-});
 </script>
 {% endblock %}
