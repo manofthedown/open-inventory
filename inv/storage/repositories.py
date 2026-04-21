@@ -1,10 +1,14 @@
 """Repository pattern for data access.
 
-Repositories abstract the ORM layer and provide a clean interface for services.
+Repositories wrap the ORM and expose intent-revealing methods to the
+service layer. No business logic lives here — just CRUD and read models.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from inv.storage.orm import Item, Location, Movement
@@ -25,23 +29,38 @@ class ItemRepository:
         """Get an item by ID."""
         return self.session.query(Item).filter_by(id=item_id).first()
 
-    def create(self, gtin: str, **kwargs) -> Item:  # type: ignore[no-untyped-def]
-        """Create a new item."""
-        item = Item(gtin=gtin, **kwargs)
+    def create(self, gtin: str, **fields: Any) -> Item:
+        """Create a new item. Caller is responsible for flushing/committing."""
+        item = Item(gtin=gtin, **fields)
         self.session.add(item)
-        self.session.commit()
+        self.session.flush()
         return item
 
-    def upsert(self, gtin: str, **kwargs) -> Item:  # type: ignore[no-untyped-def]
-        """Get or create an item. If it exists, update it."""
-        item = self.get_by_gtin(gtin)
-        if item:
-            for key, value in kwargs.items():
-                if value is not None:
-                    setattr(item, key, value)
-            self.session.commit()
-            return item
-        return self.create(gtin, **kwargs)
+    def get_or_create_stub(self, gtin: str) -> tuple[Item, bool]:
+        """Return (item, created) — idempotent by GTIN.
+
+        If the item already exists, return it unchanged (never touches
+        ``needs_review`` or any other field). If it doesn't exist,
+        create a ``needs_review=True`` stub.
+
+        This explicit shape replaces the old ``upsert(**kwargs)`` which
+        clobbered ``needs_review`` on every re-scan (see issue #10).
+        """
+        existing = self.get_by_gtin(gtin)
+        if existing is not None:
+            return existing, False
+        return self.create(gtin, needs_review=True, source="stub"), True
+
+    def update_fields(self, item: Item, **fields: Any) -> Item:
+        """Update one or more fields on an existing item.
+
+        Only writes fields that were explicitly passed. Used by M3's
+        enrichment flow; M2 does not call this from the scan path.
+        """
+        for key, value in fields.items():
+            setattr(item, key, value)
+        self.session.flush()
+        return item
 
 
 class LocationRepository:
@@ -77,24 +96,28 @@ class MovementRepository:
         location_id: int,
         delta: int,
         direction: str,
-        **kwargs: object,
+        actor: str | None = None,
+        note: str | None = None,
     ) -> Movement:
-        """Create a new movement record."""
+        """Create a new movement row. Caller owns the commit."""
         movement = Movement(
             item_id=item_id,
             location_id=location_id,
             delta=delta,
             direction=direction,
-            **kwargs,
+            actor=actor,
+            note=note,
         )
         self.session.add(movement)
-        self.session.commit()
+        self.session.flush()
         return movement
 
     def get_on_hand(self, item_id: int, location_id: int) -> int:
-        """Get the current on-hand quantity for an item at a location."""
-        from sqlalchemy import text
+        """Get the current on-hand quantity for an item at a location.
 
+        Reads from the ``inventory_view`` SQL VIEW created by the baseline
+        migration. Returns 0 if no movements exist.
+        """
         result = self.session.execute(
             text(
                 "SELECT COALESCE(on_hand, 0) FROM inventory_view "

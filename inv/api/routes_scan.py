@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from starlette.templating import _TemplateResponse
 
 from inv.api.deps import get_session
 from inv.core.services import (
@@ -22,38 +21,30 @@ router = APIRouter(prefix="", tags=["scan"])
 
 
 class ScanRequest(BaseModel):
-    """Request body for POST /scan."""
+    """Request body for POST /scan.
 
-    gtin: str
-    direction: str = "IN"  # IN, OUT, ADJUST
-    qty_multiplier: int = 1
-    location_id: int = 1
-    actor: str | None = None
-    note: str | None = None
+    Validation rules:
+    - ``gtin`` must be between 6 and 14 characters (UPC-E up to GTIN-14).
+      Non-digit content is allowed at this layer so future barcode
+      symbologies (Code 128, ISBN-X) can pass through; strict GTIN-13
+      check-digit validation is a separate concern.
+    - ``direction`` is a strict enum — invalid values are rejected by
+      Pydantic with a 422 instead of falling through to the DB's CHECK
+      constraint.
+    - ``qty_multiplier`` must be positive. Down-adjustments are a V2
+      concern handled with signed-ADJUST tooling.
+    """
 
-
-class ScanResponseItem(BaseModel):
-    """Item details in scan response."""
-
-    id: int
-    gtin: str
-    name: str | None
-    brand: str | None
-    on_hand: int
-
-
-class ScanResponse(BaseModel):
-    """Response body for POST /scan."""
-
-    success: bool
-    item: ScanResponseItem
-    on_hand: int
-    direction: str
-    message: str
+    gtin: str = Field(..., min_length=6, max_length=14)
+    direction: Literal["IN", "OUT", "ADJUST"] = "IN"
+    qty_multiplier: int = Field(default=1, ge=1)
+    location_id: int = Field(default=1, ge=1)
+    actor: str | None = Field(default=None, max_length=255)
+    note: str | None = Field(default=None, max_length=2000)
 
 
 @router.get("/scan", response_class=HTMLResponse, tags=["web"])
-async def get_scan_page(request: Request) -> _TemplateResponse:
+async def get_scan_page(request: Request) -> HTMLResponse:
     """Render the scan page."""
     return templates.TemplateResponse(request, "scan.html", {})
 
@@ -63,42 +54,16 @@ async def post_scan(
     req: ScanRequest,
     session: Annotated[Session, Depends(get_session)],
     request: Request,
-) -> _TemplateResponse:
+) -> HTMLResponse:
     """Record a barcode scan and update inventory.
 
-    When called with `Accept: application/json`, returns JSON (standard REST).
-    When called with `Accept: text/html` (from HTMX), returns an HTML partial.
+    Returns an HTML partial for HTMX/fetch clients. Errors use standard
+    HTTP status codes with JSON ``{"detail": "..."}`` bodies:
 
-    JSON Request body:
-    ```json
-    {
-        "gtin": "5000112139107",
-        "direction": "IN",
-        "qty_multiplier": 1,
-        "location_id": 1
-    }
-    ```
-
-    JSON Response:
-    ```json
-    {
-        "success": true,
-        "item": {
-            "id": 1,
-            "gtin": "5000112139107",
-            "name": "Coke Classic",
-            "brand": "Coca-Cola",
-            "on_hand": 42
-        },
-        "on_hand": 42,
-        "direction": "IN",
-        "message": "Scanned in 1 × Coke Classic"
-    }
-    ```
-
-    Errors:
     - 404: Location not found
     - 409: Negative stock (OUT direction would drop below 0)
+    - 422: Validation error (bad direction, empty GTIN, non-positive
+           qty_multiplier, etc.) — emitted by Pydantic automatically.
     """
     try:
         result = record_scan(
@@ -114,25 +79,18 @@ async def post_scan(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Location {e.location_id} not found",
-        )
+        ) from e
     except NegativeStockError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
-        )
+        ) from e
 
     # Construct human-readable message
-    verb = (
-        "scanned in"
-        if req.direction == "IN"
-        else "scanned out"
-        if req.direction == "OUT"
-        else "adjusted"
-    )
+    verb = {"IN": "Scanned in", "OUT": "Scanned out", "ADJUST": "Adjusted"}[req.direction]
     item_label = result.item.name or result.item.gtin
-    message = f"{verb.title()} {req.qty_multiplier} × {item_label}"
+    message = f"{verb} {req.qty_multiplier} × {item_label}"
 
-    # Return HTML partial for HTMX clients
     context = {
         "item": result.item,
         "on_hand": result.on_hand,

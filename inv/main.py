@@ -7,16 +7,28 @@ from fastapi.responses import HTMLResponse
 from inv import __version__
 from inv.api.routes_scan import router as scan_router
 from inv.settings import Settings
+from inv.storage.db import init_engine
 from inv.web import mount_static, templates
 
 
 def create_app(settings: Settings) -> FastAPI:
-    """Create and configure the FastAPI application."""
+    """Create and configure the FastAPI application.
+
+    The settings and a single SQLAlchemy engine are stored on
+    ``app.state`` so every request (and every test) shares the same
+    connection pool and the same configuration. Tests that want a
+    different DB construct a new app with fresh settings; nothing is
+    read from the environment at request time.
+    """
     app = FastAPI(
         title="open-inventory",
         version=__version__,
         description="Lightweight barcode scan-in/scan-out inventory system",
     )
+
+    # Bind settings + engine on app state (DI reads from here).
+    app.state.settings = settings
+    app.state.engine = init_engine(settings)
 
     # CORS: V1 binds 127.0.0.1 only by default; loosen only on LAN deploys.
     # NOTE: allow_credentials=True with allow_origins=["*"] is rejected by
