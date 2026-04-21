@@ -92,3 +92,78 @@ def test_record_scan_adjust_direction(session) -> None:
     result = record_scan(session, gtin=gtin, direction="ADJUST", qty_multiplier=5, location_id=1)
     assert result.on_hand == 15
     assert result.direction == "ADJUST"
+
+
+def test_record_scan_does_not_clobber_needs_review_on_rescan(session) -> None:
+    """Re-scanning a known GTIN must NOT reset the ``needs_review`` flag.
+
+    Regression for issue #10: the old ``upsert(**kwargs)`` path passed
+    ``needs_review=False`` on every re-scan and blindly overwrote the
+    column, breaking M3's manual-enrichment queue.
+    """
+    gtin = "7777777777777"
+
+    # First scan — creates a stub with needs_review=True
+    r1 = record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+    assert r1.item.needs_review is True
+
+    # Second scan — the flag must remain True (no human has enriched yet)
+    r2 = record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+    assert r2.item.needs_review is True
+
+    # Simulate an operator enriching the item (clearing the flag)
+    r2.item.needs_review = False
+    session.commit()
+
+    # Third scan — the flag stays cleared (record_scan must not re-set it)
+    r3 = record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+    assert r3.item.needs_review is False
+
+
+def test_record_scan_emits_movement_created_signal(session) -> None:
+    """Every ``record_scan`` fires ``movement.created`` with the correct payload."""
+    from inv.core.events import MovementCreatedEvent, movement_created
+
+    received: list[MovementCreatedEvent] = []
+
+    def _catch(_sender: object, event: MovementCreatedEvent) -> None:
+        received.append(event)
+
+    movement_created.connect(_catch)
+    try:
+        result = record_scan(
+            session, gtin="8888888888888", direction="IN", qty_multiplier=3, location_id=1
+        )
+    finally:
+        movement_created.disconnect(_catch)
+
+    assert len(received) == 1
+    evt = received[0]
+    assert evt.movement_id == result.movement_id
+    assert evt.item_id == result.item_id
+    assert evt.location_id == 1
+    assert evt.delta == 3
+    assert evt.direction == "IN"
+
+
+def test_record_scan_emits_item_created_only_once(session) -> None:
+    """``item.created`` fires on the first scan only; re-scans are silent."""
+    from inv.core.events import ItemCreatedEvent, item_created
+
+    received: list[ItemCreatedEvent] = []
+
+    def _catch(_sender: object, event: ItemCreatedEvent) -> None:
+        received.append(event)
+
+    gtin = "9000000000009"
+    item_created.connect(_catch)
+    try:
+        record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+        record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+        record_scan(session, gtin=gtin, direction="IN", qty_multiplier=1, location_id=1)
+    finally:
+        item_created.disconnect(_catch)
+
+    assert len(received) == 1
+    assert received[0].gtin == gtin
+    assert received[0].source == "stub"
