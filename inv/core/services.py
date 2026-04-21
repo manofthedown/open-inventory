@@ -1,16 +1,26 @@
 """Business logic and service layer.
 
 Services orchestrate repositories, emit events, and enforce domain rules.
+All persistence happens inside a single transaction per public service
+call so we never leave the DB half-written on errors.
 """
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from sqlalchemy.orm import Session
 
+from inv.core.events import (
+    ItemCreatedEvent,
+    MovementCreatedEvent,
+    item_created,
+    movement_created,
+)
 from inv.storage.orm import Item as ItemORM
 from inv.storage.repositories import ItemRepository, LocationRepository, MovementRepository
+
+Direction = Literal["IN", "OUT", "ADJUST"]
 
 
 class ScanResult(NamedTuple):
@@ -21,14 +31,12 @@ class ScanResult(NamedTuple):
     location_id: int
     item: ItemORM
     on_hand: int
-    direction: str
+    direction: Direction
     delta: int
 
 
 class ScanError(Exception):
     """Base exception for scan errors."""
-
-    pass
 
 
 class NegativeStockError(ScanError):
@@ -53,10 +61,28 @@ class LocationNotFoundError(ScanError):
         super().__init__(f"Location {location_id} not found")
 
 
+def _compute_delta(direction: Direction, qty_multiplier: int) -> int:
+    """Turn a (direction, qty_multiplier) pair into a signed delta.
+
+    - IN contributes +qty_multiplier eaches.
+    - OUT contributes -qty_multiplier eaches.
+    - ADJUST contributes the raw qty_multiplier (may be negative if the
+      operator is reconciling a shrink; M2 validates qty_multiplier >= 1
+      at the API layer so this currently always yields +qty for ADJUST,
+      but the service does not enforce sign so reconciliation tooling
+      can land in M3+ without another service-layer change).
+    """
+    if direction == "IN":
+        return qty_multiplier
+    if direction == "OUT":
+        return -qty_multiplier
+    return qty_multiplier
+
+
 def record_scan(
     session: Session,
     gtin: str,
-    direction: str,
+    direction: Direction,
     qty_multiplier: int = 1,
     location_id: int = 1,
     actor: str | None = None,
@@ -64,11 +90,18 @@ def record_scan(
 ) -> ScanResult:
     """Record a barcode scan and update inventory.
 
+    All writes happen inside a single transaction. Emits
+    ``item.created`` (only on first sighting) and ``movement.created``
+    (every scan) via :mod:`inv.core.events` after commit.
+
     Args:
         session: Database session.
-        gtin: The barcode (GTIN) scanned.
-        direction: 'IN', 'OUT', or 'ADJUST'.
-        qty_multiplier: Number of eaches per scan (1 for each, 12 for case, etc).
+        gtin: The barcode (GTIN) scanned. Caller is responsible for
+            format validation at the API layer.
+        direction: ``"IN"``, ``"OUT"``, or ``"ADJUST"`` — enforced by
+            :data:`Direction`.
+        qty_multiplier: Number of eaches per scan (1 for each, 12 for a
+            case of 12, etc.). API layer validates >= 1.
         location_id: Which location to move stock from/to.
         actor: Who performed the scan (optional).
         note: Additional notes about the movement (optional).
@@ -78,33 +111,29 @@ def record_scan(
 
     Raises:
         LocationNotFoundError: If location_id doesn't exist.
-        NegativeStockError: If direction is OUT and would drop on-hand below 0.
+        NegativeStockError: If direction is OUT and would drop on-hand
+            below 0.
     """
-    # Validate location exists
     loc_repo = LocationRepository(session)
-    location = loc_repo.get_by_id(location_id)
-    if not location:
+    item_repo = ItemRepository(session)
+    mov_repo = MovementRepository(session)
+
+    # Validate location exists
+    if loc_repo.get_by_id(location_id) is None:
         raise LocationNotFoundError(location_id)
 
-    # Get or create item (stub if unknown)
-    item_repo = ItemRepository(session)
-    item = item_repo.upsert(gtin, needs_review=(True if not item_repo.get_by_gtin(gtin) else False))
+    # Get or create item stub — idempotent, does NOT clobber
+    # ``needs_review`` on re-scan (issue #10).
+    item, item_was_created = item_repo.get_or_create_stub(gtin)
 
-    # Calculate delta
-    mov_repo = MovementRepository(session)
-    delta = (
-        qty_multiplier
-        if direction == "IN"
-        else -qty_multiplier
-        if direction == "OUT"
-        else qty_multiplier
-    )
+    # Compute signed delta
+    delta = _compute_delta(direction, qty_multiplier)
 
     # Guard: prevent negative stock on OUT
     if direction == "OUT":
-        on_hand = mov_repo.get_on_hand(item.id, location_id)
-        if on_hand + delta < 0:
-            raise NegativeStockError(gtin, on_hand, abs(delta))
+        current = mov_repo.get_on_hand(item.id, location_id)
+        if current + delta < 0:
+            raise NegativeStockError(gtin, current, abs(delta))
 
     # Record the movement
     movement = mov_repo.create(
@@ -116,8 +145,31 @@ def record_scan(
         note=note,
     )
 
-    # Fetch new on-hand
+    # Single commit covers item stub (if created) + movement.
+    session.commit()
+
+    # Re-read on_hand from the view after commit.
     on_hand_after = mov_repo.get_on_hand(item.id, location_id)
+
+    # Emit events AFTER commit so subscribers see a consistent DB state.
+    if item_was_created:
+        item_created.send(
+            "record_scan",
+            event=ItemCreatedEvent(item_id=item.id, gtin=item.gtin, source="stub"),
+        )
+
+    movement_created.send(
+        "record_scan",
+        event=MovementCreatedEvent(
+            movement_id=movement.id,
+            item_id=item.id,
+            location_id=location_id,
+            delta=delta,
+            direction=direction,
+            actor=actor,
+            created_at=movement.created_at,
+        ),
+    )
 
     return ScanResult(
         movement_id=movement.id,
