@@ -39,7 +39,14 @@ dependencies = [
     "typer>=0.9.0",
 ]
 
-[project.optional-dependencies]
+[project.scripts]
+inventory = "inv.cli:main"
+
+# Development dependencies live in a PEP 735 dependency group so
+# `uv sync --frozen` installs them automatically (uv's default groups
+# include `dev`). Keeping them out of `[project.optional-dependencies]`
+# means they never bleed into the published wheel's metadata.
+[dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -48,9 +55,6 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.6.0",
 ]
-
-[project.scripts]
-inventory = "inv.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["inv"]
