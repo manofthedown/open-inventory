@@ -1,18 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}open-inventory{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/pico.min.css">
-    <script src="/static/js/htmx.min.js"></script>
-    <script src="/static/js/alpine.min.js"></script>
+    <script defer src="/static/js/htmx.min.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
 </head>
 <body>
-    <main>
+    <main class="container">
         <header>
-            <h1><a href="/">open-inventory</a></h1>
             <nav>
+                <ul>
+                    <li><strong><a href="/">open-inventory</a></strong></li>
+                </ul>
                 <ul>
                     <li><a href="/scan">Scan</a></li>
                     <li><a href="/inventory">Inventory</a></li>
@@ -21,7 +23,22 @@
             </nav>
         </header>
 
-        {% block content %}{% endblock %}
+        {% block content %}
+        <article>
+            <header>
+                <h1>open-inventory</h1>
+                <p>Scan-in / scan-out inventory, vendored and offline-first.</p>
+            </header>
+            <p>
+                This is the M1 skeleton. The scan screen, lookup chain, inventory views, and
+                CSV exports land in M2–M4. For now, the system is up and the schema is migrated.
+            </p>
+            <ul>
+                <li><code>GET /health</code> — liveness probe</li>
+                <li><code>GET /version</code> — version string (<code>{{ version }}</code>)</li>
+            </ul>
+        </article>
+        {% endblock %}
     </main>
 
     <script src="/static/js/scan_focus.js"></script>
