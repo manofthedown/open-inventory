@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Enrich {{ item.gtin }} — open-inventory{% endblock %}
+
+{% block content %}
+<section>
+    <hgroup>
+        <h2>Enrich item</h2>
+        <p>
+            GTIN <code>{{ item.gtin }}</code>
+            {% if item.source and item.source != "stub" %} · source: {{ item.source }}{% endif %}
+        </p>
+    </hgroup>
+
+    {% if message %}
+    <article>
+        <p>{{ message }}</p>
+    </article>
+    {% endif %}
+
+    <form method="POST" action="/items/{{ item.id }}/enrich">
+        <label for="name">
+            Name
+            <input
+                type="text"
+                id="name"
+                name="name"
+                value="{{ item.name or '' }}"
+                placeholder="Product name"
+                maxlength="500"
+            >
+        </label>
+
+        <label for="brand">
+            Brand
+            <input
+                type="text"
+                id="brand"
+                name="brand"
+                value="{{ item.brand or '' }}"
+                placeholder="Brand or manufacturer"
+                maxlength="255"
+            >
+        </label>
+
+        <label for="category">
+            Category
+            <input
+                type="text"
+                id="category"
+                name="category"
+                value="{{ item.category or '' }}"
+                placeholder="e.g. Food, Beverages, Clothing"
+                maxlength="255"
+            >
+        </label>
+
+        <label for="note">
+            Note <small>(optional, stored in metadata)</small>
+            <input
+                type="text"
+                id="note"
+                name="note"
+                value=""
+                placeholder="Any notes about this item"
+                maxlength="2000"
+            >
+        </label>
+
+        <div style="display: flex; gap: 1em; margin-top: 1em;">
+            <button type="submit">Save &amp; clear review flag</button>
+            <a href="/items" role="button" class="outline secondary">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

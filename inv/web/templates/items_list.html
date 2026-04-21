@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Items — open-inventory{% endblock %}
+
+{% block content %}
+<section>
+    <hgroup>
+        <h2>Items</h2>
+        <p>
+            {% if filter == "needs_review" %}
+                Showing items that need manual enrichment.
+                <a href="/items">Show all</a>
+            {% else %}
+                All known items.
+                <a href="/items?filter=needs_review">Show needs-review only</a>
+            {% endif %}
+        </p>
+    </hgroup>
+
+    {% if items %}
+    <div class="overflow-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>GTIN</th>
+                    <th>Name</th>
+                    <th>Brand</th>
+                    <th>Category</th>
+                    <th>Source</th>
+                    <th>Review?</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><code>{{ item.gtin }}</code></td>
+                    <td>{{ item.name or "—" }}</td>
+                    <td>{{ item.brand or "—" }}</td>
+                    <td>{{ item.category or "—" }}</td>
+                    <td>{{ item.source or "stub" }}</td>
+                    <td>
+                        {% if item.needs_review %}
+                        <mark>needs review</mark>
+                        {% else %}
+                        ✓
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/items/{{ item.id }}/enrich" role="button" class="outline">Enrich</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No items found.
+        {% if filter == "needs_review" %}
+            All items have been reviewed — great work!
+        {% else %}
+            Scan a barcode to create the first item.
+        {% endif %}
+    </p>
+    {% endif %}
+</section>
+{% endblock %}
