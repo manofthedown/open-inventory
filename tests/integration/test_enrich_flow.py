@@ -234,3 +234,6 @@ def test_scan_unknown_signal_fired_on_all_miss(client: TestClient) -> None:
 
     assert len(received) == 1
     assert received[0].gtin == gtin
+    # attempted_providers must now be populated — not an empty tuple (issue #22)
+    assert len(received[0].attempted_providers) > 0
+    assert "openfoodfacts" in received[0].attempted_providers

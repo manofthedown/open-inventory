@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import NamedTuple
 
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,28 @@ from inv.lookup.upcitemdb import UPCitemdbProvider
 log = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 3.0  # seconds per provider
+
+
+class ChainResult(NamedTuple):
+    """Return value of :meth:`ChainRunner.run`.
+
+    Carries both the lookup outcome and the list of network providers
+    that were actually attempted (in order), so callers can surface
+    accurate diagnostic data in ``ScanUnknownEvent.attempted_providers``
+    rather than always passing an empty tuple.
+
+    Attributes:
+        result: A populated :class:`~inv.lookup.base.ProviderResult` on
+            a hit, or ``None`` if every provider missed.
+        attempted_providers: Tuple of provider ``name`` strings for every
+            network provider that was called (skipped providers, e.g.
+            OpenLibrary on a non-ISBN GTIN, are still included because
+            they were invoked — they just returned ``None`` immediately).
+            Empty tuple on a cache hit (no network providers were tried).
+    """
+
+    result: ProviderResult | None
+    attempted_providers: tuple[str, ...]
 
 
 class ChainRunner:
@@ -71,18 +94,21 @@ class ChainRunner:
             *(extra_providers or []),
         ]
 
-    async def run(self, gtin: str) -> ProviderResult | None:
+    async def run(self, gtin: str) -> ChainResult:
         """Look up a GTIN through the full chain.
 
-        Returns the first successful ``ProviderResult``, or ``None`` if
-        every provider misses. Cache hits are returned immediately without
-        touching network providers.
+        Returns a :class:`ChainResult` containing the first successful
+        ``ProviderResult`` (or ``None`` on total miss) and the ordered
+        tuple of network provider names that were attempted.
+
+        Cache hits short-circuit the network providers entirely;
+        ``attempted_providers`` will be an empty tuple in that case.
         """
         # Step 0: local cache (no timeout — synchronous SQLite)
         cached = await self._cache.lookup(gtin)
         if cached is not None:
             log.debug("cache hit for %s (provider=%s)", gtin, cached.provider)
-            return cached
+            return ChainResult(result=cached, attempted_providers=())
 
         # Steps 1-4: network providers with per-provider timeout
         attempted: list[str] = []
@@ -110,10 +136,10 @@ class ChainRunner:
                 # Write through to cache
                 self._cache.store(result)
                 self._session.commit()
-                return result
+                return ChainResult(result=result, attempted_providers=tuple(attempted))
 
         log.debug("all providers missed for gtin=%s attempted=%s", gtin, attempted)
-        return None
+        return ChainResult(result=None, attempted_providers=tuple(attempted))
 
     @property
     def provider_names(self) -> list[str]:
