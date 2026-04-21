@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from inv.storage.orm import Item, Location, Movement
+from inv.storage.orm import Item, Location, Movement, ProductCache
 
 
 class ItemRepository:
@@ -126,3 +126,39 @@ class MovementRepository:
             {"item_id": item_id, "location_id": location_id},
         ).scalar()
         return int(result) if result is not None else 0
+
+
+class CacheRepository:
+    """Repository for product_cache operations.
+
+    The cache is a simple key/value store keyed on GTIN. Entries are
+    written on every successful provider hit and read before the network
+    providers are tried (see ``inv/lookup/cache.py``).
+    """
+
+    def __init__(self, session: Session) -> None:
+        """Initialize with a database session."""
+        self.session = session
+
+    def get(self, gtin: str) -> ProductCache | None:
+        """Return a cached entry by GTIN, or None if absent."""
+        return self.session.query(ProductCache).filter_by(gtin=gtin).first()
+
+    def set(self, gtin: str, provider: str, payload: dict) -> ProductCache:
+        """Upsert a cache entry. Caller owns the commit."""
+        entry = self.get(gtin)
+        if entry is not None:
+            entry.provider = provider
+            entry.payload = payload
+        else:
+            from datetime import UTC, datetime
+
+            entry = ProductCache(
+                gtin=gtin,
+                provider=provider,
+                payload=payload,
+                fetched_at=datetime.now(UTC),
+            )
+            self.session.add(entry)
+        self.session.flush()
+        return entry
