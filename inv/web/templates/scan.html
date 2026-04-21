@@ -6,7 +6,7 @@
 <section>
     <h2>Inventory Scanner</h2>
 
-    <form hx-post="/scan" hx-target="#scan-result" hx-swap="innerHTML swap:1s">
+    <form>
         <fieldset>
             <legend>Scan Mode</legend>
             <div>
@@ -81,49 +81,103 @@
     <hr>
 
     <h3>Last Scans</h3>
-    <div id="scan-history" style="border: 1px solid #ddd; padding: 1em; border-radius: 0.5em; max-height: 200px; overflow-y: auto;">
-        <p style="color: #999; text-align: center;">Scans appear here...</p>
+    <div id="scan-history" style="border: 1px solid #ddd; padding: 1em; border-radius: 0.5em; max-height: 200px; overflow-y: auto; min-height: 100px;">
     </div>
 </section>
 
 <script>
 /**
- * Custom qty_multiplier logic:
- * If the user selects "Custom", grab the value from the custom input.
- * Otherwise use the selected radio value directly.
+ * Handle barcode scanner input: when user presses Enter (or scanner sends Enter),
+ * POST the form data to /scan via HTMX.
  */
-document.addEventListener('htmx:beforeSend', function(evt) {
-    if (evt.detail.xhr.method === 'POST') {
-        const form = evt.detail.xhr.request.target;
-        const selectedMode = document.querySelector('input[name="qty_multiplier"]:checked');
-        if (selectedMode && selectedMode.value === 'custom') {
-            const customInput = document.getElementById('custom-multiplier');
-            // Overwrite the form data
-            evt.detail.parameters.qty_multiplier = parseInt(customInput.value) || 1;
-        } else if (selectedMode) {
-            evt.detail.parameters.qty_multiplier = parseInt(selectedMode.value) || 1;
-        }
+document.getElementById('scan-input').addEventListener('keydown', function(evt) {
+    if (evt.key === 'Enter') {
+        evt.preventDefault();
+        submitScan();
     }
 });
 
+async function submitScan() {
+    const scanInput = document.getElementById('scan-input');
+    const gtin = scanInput.value.trim();
+    
+    if (!gtin) {
+        return;  // Ignore empty scans
+    }
+    
+    // Get form values
+    const direction = document.querySelector('input[name="direction"]:checked').value;
+    const locationId = document.querySelector('input[name="location_id"]').value;
+    let qtyMultiplier = 1;
+    
+    const selectedMode = document.querySelector('input[name="qty_multiplier"]:checked');
+    if (selectedMode.value === 'custom') {
+        const customValue = parseInt(document.getElementById('custom-multiplier').value) || 1;
+        qtyMultiplier = customValue;
+    } else {
+        qtyMultiplier = parseInt(selectedMode.value) || 1;
+    }
+    
+    const payload = {
+        gtin: gtin,
+        direction: direction,
+        qty_multiplier: qtyMultiplier,
+        location_id: parseInt(locationId),
+    };
+    
+    try {
+        const response = await fetch('/scan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        
+        if (response.ok) {
+            const html = await response.text();
+            const resultDiv = document.getElementById('scan-result');
+            resultDiv.innerHTML = html;
+            
+            // Execute any scripts in the response
+            const scripts = resultDiv.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                newScript.textContent = script.textContent;
+                resultDiv.appendChild(newScript);
+            });
+            
+            // Trigger HTMX swap animation
+            htmx.process(resultDiv);
+        } else {
+            const errorText = await response.text();
+            let errorMessage = `Error ${response.status}`;
+            
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch (e) {
+                errorMessage = errorText || errorMessage;
+            }
+            
+            document.getElementById('scan-result').innerHTML = `<div style="color: red; padding: 1em; border: 1px solid red; border-radius: 4px; background: #ffe6e6;">${errorMessage}</div>`;
+        }
+    } catch (error) {
+        console.error('Fetch error:', error);
+        document.getElementById('scan-result').innerHTML = `<div style="color: red; padding: 1em;">Network error: ${error.message}</div>`;
+    }
+    
+    // Clear input for next scan
+    scanInput.value = '';
+}
+
 /**
- * Re-focus the scan input after each HTMX swap so scanning continues uninterrupted.
+ * Re-focus the scan input after HTMX response, so scanning continues uninterrupted.
  */
-document.addEventListener('htmx:afterSwap', function(evt) {
+document.body.addEventListener('htmx:afterSwap', function(evt) {
     const scanInput = document.getElementById('scan-input');
     if (scanInput) {
         scanInput.focus();
-        scanInput.select();  // Select all text so next scan overwrites it
-    }
-});
-
-/**
- * On form submit, clear the input so it's ready for the next scan.
- */
-document.querySelector('form').addEventListener('htmx:beforeRequest', function(evt) {
-    const scanInput = document.getElementById('scan-input');
-    if (scanInput) {
-        scanInput.value = '';
     }
 });
 </script>

@@ -22,22 +22,24 @@
 
 <!-- Add to scan history -->
 <script>
-const historyDiv = document.getElementById('scan-history');
-if (historyDiv) {
-    const entry = document.createElement('div');
-    entry.style.padding = '0.5em';
-    entry.style.borderBottom = '1px solid #eee';
-    entry.style.fontSize = '0.85em';
-    const absDelta = Math.abs({{ delta }});
-    entry.innerHTML = '<strong>' + '{{ item.name or item.gtin }}' + '</strong><br>' +
-                      '<span style="color: #666;">' + '{{ direction }}' + ' ×' + absDelta + ', on-hand: ' + '{{ on_hand }}' + '</span>';
-    historyDiv.insertBefore(entry, historyDiv.firstChild);
+(function() {
+    const historyDiv = document.getElementById('scan-history');
+    if (historyDiv) {
+        const entry = document.createElement('div');
+        entry.style.padding = '0.5em';
+        entry.style.borderBottom = '1px solid #eee';
+        entry.style.fontSize = '0.85em';
+        const absDelta = Math.abs({{ delta }});
+        entry.innerHTML = '<strong>' + '{{ item.name or item.gtin }}' + '</strong><br>' +
+                          '<span style="color: #666;">' + '{{ direction }}' + ' ×' + absDelta + ', on-hand: ' + '{{ on_hand }}' + '</span>';
+        historyDiv.insertBefore(entry, historyDiv.firstChild);
 
-    // Keep only last 10 entries
-    while (historyDiv.children.length > 10) {
-        historyDiv.removeChild(historyDiv.lastChild);
+        // Keep only last 10 entries
+        while (historyDiv.children.length > 10) {
+            historyDiv.removeChild(historyDiv.lastChild);
+        }
     }
-}
+})();
 </script>
 {% else %}
 <div style="color: #cc0000; padding: 1em; background: #ffe0e0; border-radius: 0.5em;">
