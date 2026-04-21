@@ -72,5 +72,63 @@
             <a href="/items" role="button" class="outline secondary">Cancel</a>
         </div>
     </form>
+
+    <hr>
+
+    <h3>Pack aliases</h3>
+    <p>
+        Register alternate GTINs (inner pack, carton, case) that should
+        auto-multiply when scanned. All quantities are stored in eaches.
+    </p>
+
+    {% if aliases %}
+    <table>
+        <thead>
+            <tr>
+                <th>Alias GTIN</th>
+                <th>Multiplier</th>
+                <th>Label</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alias in aliases %}
+            <tr>
+                <td><code>{{ alias.gtin }}</code></td>
+                <td>×{{ alias.multiplier }}</td>
+                <td>{{ alias.label or "—" }}</td>
+                <td>
+                    <form method="POST" action="/items/{{ item.id }}/aliases/{{ alias.gtin }}/delete" style="display:inline;">
+                        <button type="submit" class="outline" style="padding: 0.2em 0.8em;">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p><em>No aliases registered.</em></p>
+    {% endif %}
+
+    <h4>Add alias</h4>
+    <form method="POST" action="/items/{{ item.id }}/aliases">
+        <div style="display: flex; gap: 1em; flex-wrap: wrap; align-items: flex-end;">
+            <label style="flex: 2; min-width: 140px;">
+                Alias GTIN
+                <input type="text" name="alias_gtin" placeholder="e.g. 03017620422003" maxlength="14" required>
+            </label>
+            <label style="flex: 1; min-width: 80px;">
+                Multiplier
+                <input type="number" name="multiplier" value="12" min="2" max="10000" required>
+            </label>
+            <label style="flex: 2; min-width: 120px;">
+                Label <small>(optional)</small>
+                <input type="text" name="label" placeholder="e.g. case-12" maxlength="100">
+            </label>
+            <div>
+                <button type="submit">Add alias</button>
+            </div>
+        </div>
+    </form>
 </section>
 {% endblock %}
