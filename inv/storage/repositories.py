@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from inv.storage.orm import Item, Location, Movement, ProductCache
+from inv.storage.orm import Item, Location, Movement, PackAlias, ProductCache
 
 
 class ItemRepository:
@@ -126,6 +126,49 @@ class MovementRepository:
             {"item_id": item_id, "location_id": location_id},
         ).scalar()
         return int(result) if result is not None else 0
+
+
+class AliasRepository:
+    """Repository for PackAlias operations.
+
+    Pack aliases map alternate GTINs (inner pack, carton, case) to a
+    canonical item + multiplier. Used by the scan path to auto-multiply
+    without operator input, and managed via the enrichment form.
+    """
+
+    def __init__(self, session: Session) -> None:
+        """Initialize with a database session."""
+        self.session = session
+
+    def get_by_gtin(self, gtin: str) -> PackAlias | None:
+        """Return the alias for a given GTIN, or None if not registered."""
+        return self.session.query(PackAlias).filter_by(gtin=gtin).first()
+
+    def list_for_item(self, item_id: int) -> list[PackAlias]:
+        """Return all aliases registered for a canonical item."""
+        return self.session.query(PackAlias).filter_by(item_id=item_id).all()
+
+    def create(
+        self,
+        gtin: str,
+        item_id: int,
+        multiplier: int,
+        label: str | None = None,
+    ) -> PackAlias:
+        """Create a new pack alias. Caller owns the commit."""
+        alias = PackAlias(gtin=gtin, item_id=item_id, multiplier=multiplier, label=label)
+        self.session.add(alias)
+        self.session.flush()
+        return alias
+
+    def delete(self, gtin: str) -> bool:
+        """Delete an alias by GTIN. Returns True if it existed."""
+        alias = self.get_by_gtin(gtin)
+        if alias is None:
+            return False
+        self.session.delete(alias)
+        self.session.flush()
+        return True
 
 
 class CacheRepository:
