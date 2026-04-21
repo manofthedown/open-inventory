@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from inv import __version__
+from inv.api.routes_items import router as items_router
 from inv.api.routes_scan import router as scan_router
 from inv.settings import Settings
 from inv.storage.db import init_engine
@@ -64,9 +65,8 @@ def create_app(settings: Settings) -> FastAPI:
         """
         return templates.TemplateResponse(request, "base.html", {"version": __version__})
 
-    # Register M2 routers
+    # Register routers
     app.include_router(scan_router)
-
-    # TODO: Register API routers for M3/M4 (items, inventory, export)
+    app.include_router(items_router)
 
     return app

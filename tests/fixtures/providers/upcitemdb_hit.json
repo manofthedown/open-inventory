@@ -1,0 +1,21 @@
+{
+  "code": "OK",
+  "total": 1,
+  "offset": 0,
+  "items": [
+    {
+      "ean": "0012000161155",
+      "title": "LIFEWTR Premium Purified Bottled Water",
+      "description": "Premium purified water with electrolytes.",
+      "upc": "012000161155",
+      "brand": "LIFEWTR",
+      "model": "012000161155",
+      "category": "Food, Beverages & Tobacco > Beverages > Water",
+      "currency": "",
+      "lowest_recorded_price": 1.29,
+      "highest_recorded_price": 9.99,
+      "images": [],
+      "offers": []
+    }
+  ]
+}

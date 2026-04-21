@@ -15,6 +15,7 @@ from inv.core.services import (
     NegativeStockError,
     record_scan,
 )
+from inv.lookup.chain import ChainRunner
 from inv.web import templates
 
 router = APIRouter(prefix="", tags=["scan"])
@@ -57,6 +58,11 @@ async def post_scan(
 ) -> HTMLResponse:
     """Record a barcode scan and update inventory.
 
+    On first sight of a GTIN the lookup chain runs (cache → OFF →
+    Open Library → OpenGTINdb → UPCitemdb). A hit enriches the item
+    stub in the same transaction; a miss leaves it flagged
+    ``needs_review=True``.
+
     Returns an HTML partial for HTMX/fetch clients. Errors use standard
     HTTP status codes with JSON ``{"detail": "..."}`` bodies:
 
@@ -65,6 +71,20 @@ async def post_scan(
     - 422: Validation error (bad direction, empty GTIN, non-positive
            qty_multiplier, etc.) — emitted by Pydantic automatically.
     """
+    # Run the provider chain only for first-seen GTINs. We peek at the
+    # DB first; if the item already exists we skip the network round-trip
+    # entirely (the chain would just hit the cache anyway, but this is
+    # cheaper and keeps the fast path fast).
+    from inv.storage.repositories import ItemRepository
+
+    item_repo = ItemRepository(session)
+    is_new_gtin = item_repo.get_by_gtin(req.gtin) is None
+
+    lookup_result = None
+    if is_new_gtin:
+        chain = ChainRunner(session)
+        lookup_result = await chain.run(req.gtin)
+
     try:
         result = record_scan(
             session,
@@ -74,6 +94,7 @@ async def post_scan(
             location_id=req.location_id,
             actor=req.actor,
             note=req.note,
+            lookup_result=lookup_result,
         )
     except LocationNotFoundError as e:
         raise HTTPException(

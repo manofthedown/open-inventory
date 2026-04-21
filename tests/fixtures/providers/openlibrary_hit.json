@@ -1,0 +1,29 @@
+{
+  "ISBN:9780140328721": {
+    "url": "http://openlibrary.org/books/OL7353617M/Fantastic_Mr._Fox",
+    "key": "/books/OL7353617M",
+    "title": "Fantastic Mr. Fox",
+    "authors": [
+      {
+        "url": "http://openlibrary.org/authors/OL34184A/Roald_Dahl",
+        "name": "Roald Dahl"
+      }
+    ],
+    "publishers": [
+      {
+        "name": "Puffin"
+      }
+    ],
+    "publish_date": "October 1, 1988",
+    "subjects": [
+      {
+        "name": "Juvenile fiction",
+        "url": "https://openlibrary.org/subjects/juvenile_fiction"
+      }
+    ],
+    "identifiers": {
+      "isbn_13": ["9780140328721"],
+      "openlibrary": ["OL7353617M"]
+    }
+  }
+}
