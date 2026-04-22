@@ -1,0 +1,28 @@
+[Unit]
+Description=open-inventory barcode inventory server
+Documentation=https://github.com/anomalyco/open-inventory
+After=network.target
+
+[Service]
+Type=simple
+# `inventory` is installed by pipx into ~/.local/bin which is on PATH
+# for login sessions. ExecStart uses the full binary name so systemd can
+# resolve it via the user's PATH (set by Environment= below).
+ExecStart=inventory run
+Restart=on-failure
+RestartSec=5
+
+# Expose the user's standard PATH so pipx-installed binaries are found.
+# Adjust if pipx is installed elsewhere (e.g. /usr/bin/pipx on some distros).
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:%h/.local/bin
+
+# Keep stdout/stderr in the journal (default for user units).
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening — safe defaults for a local-only web service.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

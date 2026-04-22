@@ -68,6 +68,10 @@ addopts = "-v --tb=short"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Alembic-generated migration files live in inv/alembic/ (bundled for wheel
+# distribution). Exclude them from linting — they use Alembic's own code
+# style and are not hand-authored.
+exclude = ["inv/alembic"]
 
 [tool.ruff.lint]
 select = [
@@ -92,7 +96,7 @@ warn_unused_configs = true
 warn_unused_ignores = true
 no_implicit_optional = true
 warn_return_any = true
-exclude = ["alembic"]
+exclude = ["alembic", "inv/alembic"]
 
 [[tool.mypy.overrides]]
 module = [

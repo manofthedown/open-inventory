@@ -15,10 +15,15 @@ from alembic.config import Config
 from alembic import command
 from inv.settings import Settings
 
-# Repository root is two levels up from this file: inv/storage/migrations.py
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_ALEMBIC_INI = _REPO_ROOT / "alembic.ini"
-_ALEMBIC_SCRIPT_LOCATION = _REPO_ROOT / "alembic"
+# The alembic/ directory and alembic.ini live inside the inv/ package so
+# they are included in the installed wheel and available at runtime
+# regardless of whether the package is run from a source checkout or from
+# a pipx/Docker install.  _INV_PKG_ROOT resolves to the inv/ directory
+# whether running from source (inv/storage/migrations.py → inv/) or from
+# an installed wheel (site-packages/inv/storage/migrations.py → inv/).
+_INV_PKG_ROOT = Path(__file__).resolve().parent.parent  # inv/
+_ALEMBIC_INI = _INV_PKG_ROOT / "alembic.ini"
+_ALEMBIC_SCRIPT_LOCATION = _INV_PKG_ROOT / "alembic"
 
 
 def _build_config(settings: Settings) -> Config:
