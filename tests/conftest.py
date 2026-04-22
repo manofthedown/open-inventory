@@ -89,3 +89,13 @@ def app(settings: Settings, engine: Engine):  # type: ignore[no-untyped-def]
 def client(app) -> TestClient:  # type: ignore[no-untyped-def]
     """Create FastAPI test client."""
     return TestClient(app)
+
+
+@pytest.fixture(scope="session")
+def provider_fixtures_dir() -> Path:
+    """Absolute path to tests/fixtures/providers.
+
+    Anchored to conftest.py rather than individual test files so the path
+    remains correct regardless of where a test file lives in the tree.
+    """
+    return Path(__file__).parent / "fixtures" / "providers"
