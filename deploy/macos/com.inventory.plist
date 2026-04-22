@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.inventory</string>
+
+    <!--
+        The full path to the `inventory` binary installed by pipx.
+        pipx installs into ~/Library/Python/<ver>/bin on macOS by default,
+        but `pipx ensurepath` also creates a symlink in ~/.local/bin.
+        We use the ~/.local/bin path which is more stable across Python
+        version upgrades.
+    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>exec "$HOME/.local/bin/inventory" run</string>
+    </array>
+
+    <!-- Start automatically when the user logs in. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if the process exits unexpectedly. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!--
+        Write stdout/stderr to ~/Library/Logs/inventory/ — the macOS
+        platformdirs log directory for this app.
+
+        IMPORTANT: launchd does not expand ~ or $HOME in plist path values.
+        Do NOT copy this file manually to ~/Library/LaunchAgents/ — use
+        deploy/macos/install.sh instead.  The install script rewrites these
+        paths to the correct absolute $HOME-expanded value and creates the
+        log directory before loading the agent.
+
+        The placeholder below is intentionally not a real path so that a
+        manual copy fails loudly (launchd will refuse to load a plist with
+        a non-existent log directory parent) rather than silently writing
+        logs to /tmp which may be purged on reboot.
+    -->
+    <key>StandardOutPath</key>
+    <string>__INVENTORY_LOG_DIR__/inventory.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__INVENTORY_LOG_DIR__/inventory.stderr.log</string>
+
+    <!--
+        Throttle rapid restarts. If the process exits within 10 seconds
+        of starting, launchd waits 10 s before restarting again.
+    -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!--
+        Pass the user's PATH so the inventory binary can locate its own
+        dependencies (uvicorn, etc.) inside the pipx venv.
+    -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,73 @@
+name: open-inventory
+
+# =============================================================================
+# open-inventory — Docker Compose configuration
+# =============================================================================
+# Quick start:
+#   docker compose up -d
+#   open http://127.0.0.1:8765/scan
+#
+# Build from source instead of pulling from GHCR:
+#   docker compose up -d --build
+#
+# View logs:
+#   docker compose logs -f
+#
+# Stop:
+#   docker compose down
+#
+# Completely remove (including data volume — WARNING: deletes all inventory data):
+#   docker compose down -v
+# =============================================================================
+
+services:
+  inventory:
+    # Pull the pre-built multi-arch image from GitHub Container Registry.
+    # To build from source, comment out `image:` and uncomment `build:`.
+    image: ghcr.io/anomalyco/open-inventory:latest
+
+    # Build from source (uncomment to use):
+    # build:
+    #   context: ../..
+    #   dockerfile: deploy/docker/Dockerfile
+
+    container_name: open-inventory
+
+    restart: unless-stopped
+
+    ports:
+      # Bind only to localhost by default (offline-first, local use).
+      # To allow LAN access, change to "0.0.0.0:8765:8765".
+      - "127.0.0.1:8765:8765"
+
+    volumes:
+      # Named volume mounted at the exact platformdirs data path inside the
+      # container. This is where SQLite stores inventory.db and the Alembic
+      # version table. Data persists across container restarts and upgrades.
+      - inv-data:/home/inv/.local/share/inventory
+
+    environment:
+      # Override these to customise behaviour without rebuilding the image.
+      # All variables use the INVENTORY_ prefix (pydantic-settings convention).
+      INVENTORY_LOG_LEVEL: "info"
+      # INVENTORY_DATABASE_URL: "sqlite:////home/inv/.local/share/inventory/inventory.db"
+      # INVENTORY_HOST: "0.0.0.0"
+      # INVENTORY_PORT: "8765"
+
+    # Basic health check: poll /health every 30 s.
+    # wget is used instead of a Python one-liner to avoid spawning a full
+    # Python interpreter on every check (which added ~60 MB RSS overhead
+    # per 30-second cycle on low-memory devices like a Raspberry Pi).
+    # wget ships in the python:3.12-slim base image via busybox.
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  # Named volume for persistent SQLite data.
+  # Docker manages the actual storage location on the host.
+  inv-data:
+    driver: local

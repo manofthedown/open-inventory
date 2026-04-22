@@ -1,0 +1,185 @@
+name: Release
+
+# Triggered when a version tag (e.g. v0.1.0, v1.2.3) is pushed to main.
+# Workflow:
+#   1. Run the full CI matrix (tests, lint, mypy) — same as ci.yml
+#   2. Build wheel + sdist with `uv build`
+#   3. Publish to PyPI via the trusted-publisher mechanism (OIDC, no token needed)
+#   4. Build a multi-arch Docker image (linux/amd64 + linux/arm64)
+#   5. Push to GHCR and tag it with the version + 'latest'
+#   6. Create a GitHub Release with the wheel and sdist as assets
+#
+# Required repository settings:
+#   - Actions → General → Workflow permissions: "Read and write permissions"
+#   - PyPI project must have a "GitHub Actions" trusted publisher configured
+#     (go to pypi.org → project → Publishing → Add a new publisher)
+#     Publisher settings:
+#       Owner: anomalyco
+#       Repository: open-inventory
+#       Workflow name: release.yml
+#       Environment: pypi  (matches the `environment:` key below)
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"          # e.g. v0.1.0
+      - "v[0-9]+.[0-9]+.[0-9]+-*"        # e.g. v0.1.0-rc1
+
+permissions:
+  contents: write       # needed to create GitHub Releases and upload assets
+  packages: write       # needed to push to GHCR
+  id-token: write       # needed for PyPI OIDC trusted-publisher auth
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Full CI matrix — must pass before any artifact is published
+  # ---------------------------------------------------------------------------
+  ci:
+    name: CI (${{ matrix.os }} / py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        # Pin to the same version used in the Dockerfile builder stage so
+        # the release CI environment matches the container build environment.
+        run: python -m pip install --upgrade pip "uv==0.5.18"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run pytest
+        run: uv run pytest --tb=short
+
+      - name: Run ruff
+        run: uv run ruff check inv tests
+
+      - name: Run mypy
+        run: uv run mypy inv
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Build wheel + sdist, publish to PyPI, create GitHub Release
+  # ---------------------------------------------------------------------------
+  publish-pypi:
+    name: Build & publish to PyPI
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: pypi          # matches the trusted publisher environment on PyPI
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip "uv==0.5.18"
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Verify dist/ contents
+        run: ls -lh dist/
+
+      - name: Publish to PyPI (OIDC trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No `password:` needed — OIDC token is used automatically.
+        # Add `repository-url: https://test.pypi.org/legacy/` to test first.
+
+      - name: Upload dist artifacts to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Create a GitHub Release with the built artifacts
+  # ---------------------------------------------------------------------------
+  github-release:
+    name: GitHub Release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "open-inventory ${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+          files: dist/*
+          fail_on_unmatched_files: true
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Build and push multi-arch Docker image to GHCR
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image (linux/amd64 + linux/arm64)
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (for arm64 cross-build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/open-inventory
+          tags: |
+            # Tag with the exact version: e.g. v0.1.0 → 0.1.0
+            type=semver,pattern={{version}}
+            # Also tag as 'latest' on every non-prerelease tag
+            type=semver,pattern=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache layers in the GitHub Actions cache for faster rebuilds.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
