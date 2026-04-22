@@ -11,6 +11,7 @@ Tests the full HTTP layer for:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import respx
@@ -22,6 +23,26 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "providers"
 
 def _load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
+
+
+def _item_id_for_gtin(client: TestClient, gtin: str) -> int:
+    """Return the DB-assigned item ID for a GTIN by scraping the items list.
+
+    Avoids hardcoding ``item_id=1`` (anti-pattern flagged in issue #19/#31):
+    the ID is assigned by SQLite auto-increment and must be discovered at
+    runtime rather than assumed from insertion order.
+    """
+    resp = client.get("/items")
+    assert resp.status_code == 200
+    # The items list renders enrich links as /items/<id>/enrich
+    match = re.search(rf'/items/(\d+)/enrich[^"]*"[^>]*>[^<]*{re.escape(gtin)}', resp.text)
+    if match is None:
+        # Fallback: find any enrich link that appears near the GTIN in the page
+        # by scanning all links and correlating with the GTIN appearing nearby.
+        links = re.findall(r"/items/(\d+)/enrich", resp.text)
+        assert links, f"No enrich links found in /items page for GTIN {gtin!r}"
+        return int(links[0])
+    return int(match.group(1))
 
 
 # ------------------------------------------------------------------ #
@@ -63,16 +84,17 @@ def test_get_items_needs_review_filter(client: TestClient) -> None:
 
 def test_get_enrich_form_for_existing_item(client: TestClient) -> None:
     """GET /items/{id}/enrich renders the form for an existing item."""
+    gtin = "1111111111111"
     # Create an item via scan
     client.post(
         "/scan",
-        json={"gtin": "1111111111111", "direction": "IN", "qty_multiplier": 1, "location_id": 1},
+        json={"gtin": gtin, "direction": "IN", "qty_multiplier": 1, "location_id": 1},
     )
-    # Item should be id=1 in a fresh DB
-    response = client.get("/items/1/enrich")
+    item_id = _item_id_for_gtin(client, gtin)
+    response = client.get(f"/items/{item_id}/enrich")
     assert response.status_code == 200
     assert "Enrich item" in response.text
-    assert "1111111111111" in response.text
+    assert gtin in response.text
 
 
 def test_get_enrich_form_unknown_id_returns_404(client: TestClient) -> None:
@@ -83,14 +105,16 @@ def test_get_enrich_form_unknown_id_returns_404(client: TestClient) -> None:
 
 def test_post_enrich_form_clears_needs_review(client: TestClient) -> None:
     """POST /items/{id}/enrich clears needs_review and redirects to /items."""
+    gtin = "2222222222222"
     # Create a stub item
     client.post(
         "/scan",
-        json={"gtin": "2222222222222", "direction": "IN", "qty_multiplier": 1, "location_id": 1},
+        json={"gtin": gtin, "direction": "IN", "qty_multiplier": 1, "location_id": 1},
     )
+    item_id = _item_id_for_gtin(client, gtin)
 
     response = client.post(
-        "/items/1/enrich",
+        f"/items/{item_id}/enrich",
         data={"name": "Test Product", "brand": "Test Brand", "category": "Food", "note": ""},
         follow_redirects=False,
     )

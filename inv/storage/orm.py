@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -60,8 +60,10 @@ class Movement(Base):
 
     __tablename__ = "movement"
     __table_args__ = (
+        # Enforce valid direction values at the DB level.
+        # Append-only semantics are guaranteed by the application layer:
+        # only INSERT is permitted; UPDATE/DELETE are never issued on this table.
         CheckConstraint("direction IN ('IN', 'OUT', 'ADJUST')"),
-        UniqueConstraint("id"),  # Append-only guarantee
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
