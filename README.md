@@ -25,25 +25,27 @@ A minimalist inventory program that captures USB barcode scans and records units
 ### Quick Start (Arch Linux)
 
 ```bash
-sudo pacman -S --needed uv git
-git clone https://github.com/manofthedown/open-inventory.git
-cd open-inventory
-uv sync
-uv run inventory init
-uv run inventory run
+sudo pacman -S python python-pipx git
+pipx install open-inventory
+inventory init
+inventory run
 ```
 
 Open your browser to `http://127.0.0.1:8765/scan`.
 
-### Other Platforms
+### Per-platform guides
 
-See the [docs/](docs/) directory for platform-specific quickstart guides:
+| Platform | Guide |
+|----------|-------|
+| Arch Linux | [docs/QUICKSTART_ARCH.md](docs/QUICKSTART_ARCH.md) |
+| Raspberry Pi | [docs/QUICKSTART_PI.md](docs/QUICKSTART_PI.md) |
+| macOS | [docs/QUICKSTART_MACOS.md](docs/QUICKSTART_MACOS.md) |
+| Windows | [docs/QUICKSTART_WINDOWS.md](docs/QUICKSTART_WINDOWS.md) |
+| Docker | [docs/QUICKSTART_DOCKER.md](docs/QUICKSTART_DOCKER.md) |
 
-- [Arch Linux](docs/QUICKSTART_ARCH.md)
-- [Raspberry Pi](docs/QUICKSTART_PI.md)
-- [macOS](docs/QUICKSTART_MACOS.md)
-- [Windows](docs/QUICKSTART_WINDOWS.md)
-- [Docker](docs/QUICKSTART_DOCKER.md)
+> **Arch AUR (PKGBUILD):** AUR packaging was a stretch goal for V1 and is
+> deferred to a post-release task.  Arch users should use the standard
+> `uv sync` / `pipx install` path in the quickstart above.
 
 ## Usage
 
@@ -87,11 +89,11 @@ We welcome contributions! Please:
 
 ## Roadmap (Milestones)
 
-- **M1**: Skeleton (core FastAPI setup, database, basic CLI)
-- **M2**: Scan Loop (POST /scan endpoint, HTMX UI, HID scanner integration)
-- **M3**: Lookup Chain (product data providers, caching, manual enrichment)
-- **M4**: Casepacks, Inventory Views, CSV Export
-- **M5**: Packaging & Cross-Platform Docs (pipx, systemd, macOS, Windows, Docker)
+- **M1**: Skeleton (core FastAPI setup, database, basic CLI) ✓
+- **M2**: Scan Loop (POST /scan endpoint, HTMX UI, HID scanner integration) ✓
+- **M3**: Lookup Chain (product data providers, caching, manual enrichment) ✓
+- **M4**: Casepacks, Inventory Views, CSV Export ✓
+- **M5**: Packaging & Cross-Platform Docs (pipx, systemd, macOS, Windows, Docker) ✓
 
 **Out of Scope for V1** (explicitly deferred to V2+):
 - Lot/expiry/FEFO tracking
@@ -127,7 +129,7 @@ Visit `http://127.0.0.1:8765/health` to check the server is running.
 
 ## Architecture
 
-For a deep dive into the module structure, data model, and provider chain, see [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For a deep dive into the module structure, data model, and provider chain, see [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
 
 ## License
 
