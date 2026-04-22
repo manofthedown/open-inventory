@@ -174,7 +174,10 @@ free to land it; otherwise ignore the red X.
 - **Smoke tests** in `tests/smoke/` — optional Playwright/keystroke tests.
 
 Use `respx` for mocking HTTPX calls (provider lookups). Recorded fixtures
-live under `tests/fixtures/providers/` so the suite runs offline.
+live under `tests/fixtures/providers/` so the suite runs offline. Access
+them via the `provider_fixtures_dir` session fixture from `conftest.py`
+— never construct a `Path(__file__).parent...` chain pointing at that
+directory from inside a test file (see Gotchas below).
 
 ### Example test
 
@@ -234,6 +237,16 @@ These are in the codebase because a previous PR fixed them. Don't re-break them.
   upsert-with-kwargs that overwrites fields.
 - **CORS `allow_credentials=True` + `allow_origins=["*"]` is a spec
   violation.** Browsers reject the combo. Keep origins explicit.
+- **Don't use `__file__`-relative paths to reach `tests/fixtures/` from
+  inside a test file.** Use the `provider_fixtures_dir` session fixture
+  from `tests/conftest.py` instead. `conftest.py`'s location relative to
+  `tests/` is guaranteed by pytest's discovery rules; a
+  `Path(__file__).parent.parent / ...` chain silently resolves to the
+  wrong directory if the test file is ever moved to a different depth.
+  If a test fixture file needs a local fixture for intentionally isolated
+  state (e.g. `fresh_settings` in `test_migrations.py`), add a comment
+  explaining why it is local so the next contributor doesn't move it to
+  `conftest.py` by mistake.
 
 ## Milestones & Scope
 
