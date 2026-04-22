@@ -24,12 +24,12 @@ services:
   inventory:
     # Pull the pre-built multi-arch image from GitHub Container Registry.
     # To build from source, comment out `image:` and uncomment `build:`.
-    image: ghcr.io/anomalyco/open-inventory:latest
+    # image: ghcr.io/anomalyco/open-inventory:latest
 
     # Build from source (uncomment to use):
-    # build:
-    #   context: ../..
-    #   dockerfile: deploy/docker/Dockerfile
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
 
     container_name: open-inventory
 
