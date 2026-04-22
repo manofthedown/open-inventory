@@ -17,12 +17,6 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 
-FIXTURES = Path(__file__).parent.parent / "fixtures" / "providers"
-
-
-def _load(name: str) -> dict:
-    return json.loads((FIXTURES / name).read_text())
-
 
 # ------------------------------------------------------------------ #
 # Item list                                                           #
@@ -118,10 +112,12 @@ def test_post_enrich_form_unknown_id_returns_404(client: TestClient) -> None:
 
 
 @respx.mock
-def test_scan_unknown_gtin_enriched_from_off(client: TestClient) -> None:
+def test_scan_unknown_gtin_enriched_from_off(
+    client: TestClient, provider_fixtures_dir: Path
+) -> None:
     """First scan of a food GTIN populates name/brand from Open Food Facts."""
     gtin = "3017620422003"
-    payload = _load("openfoodfacts_hit.json")
+    payload = json.loads((provider_fixtures_dir / "openfoodfacts_hit.json").read_text())
     respx.get(f"https://world.openfoodfacts.org/api/v2/product/{gtin}.json").mock(
         return_value=Response(200, json=payload)
     )
@@ -136,7 +132,9 @@ def test_scan_unknown_gtin_enriched_from_off(client: TestClient) -> None:
 
 
 @respx.mock
-def test_scan_isbn_enriched_from_openlibrary(client: TestClient) -> None:
+def test_scan_isbn_enriched_from_openlibrary(
+    client: TestClient, provider_fixtures_dir: Path
+) -> None:
     """First scan of an ISBN-13 populates title/author from Open Library."""
     isbn = "9780140328721"
     # OFF will miss (not an ISBN in their DB — simulate miss)
@@ -144,7 +142,7 @@ def test_scan_isbn_enriched_from_openlibrary(client: TestClient) -> None:
         return_value=Response(200, json={"status": 0, "code": isbn})
     )
     # Open Library hit
-    payload = _load("openlibrary_hit.json")
+    payload = json.loads((provider_fixtures_dir / "openlibrary_hit.json").read_text())
     respx.get("https://openlibrary.org/api/books").mock(
         return_value=Response(200, json=payload)
     )
@@ -180,10 +178,12 @@ def test_scan_all_providers_miss_creates_needs_review_stub(client: TestClient) -
 
 
 @respx.mock
-def test_rescan_known_gtin_skips_chain(client: TestClient) -> None:
+def test_rescan_known_gtin_skips_chain(
+    client: TestClient, provider_fixtures_dir: Path
+) -> None:
     """Re-scanning a known GTIN does not hit the network (chain is bypassed)."""
     gtin = "3017620422003"
-    payload = _load("openfoodfacts_hit.json")
+    payload = json.loads((provider_fixtures_dir / "openfoodfacts_hit.json").read_text())
 
     # First scan — chain runs
     respx.get(f"https://world.openfoodfacts.org/api/v2/product/{gtin}.json").mock(

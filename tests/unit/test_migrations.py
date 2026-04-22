@@ -21,7 +21,12 @@ EXPECTED_VIEWS = {"inventory_view"}
 
 @pytest.fixture
 def fresh_settings() -> Settings:
-    """Settings pointing at a fresh temporary SQLite file."""
+    """Settings pointing at a fresh temporary SQLite file.
+
+    Intentionally defined here rather than in conftest.py: the shared ``engine``
+    fixture pre-seeds a ``Main`` location, which would interfere with downgrade
+    tests that must start from a completely bare database.
+    """
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         return Settings(database_url=f"sqlite:///{Path(f.name)}")
 
