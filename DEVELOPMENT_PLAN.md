@@ -377,6 +377,15 @@ Hard rules for the coder to follow throughout V1:
 - `deploy/docker/Dockerfile`, `compose.yml`, and the beginner walkthrough at `deploy/docker/README.md`.
 - README with per-OS quickstart links.
 - Release workflow: wheel/sdist to PyPI, multi-arch image to GHCR.
+- Architecture and contributor docs: `docs/ARCHITECTURE.md`, `docs/SCANNERS.md`,
+  `docs/PROVIDERS.md`, `docs/EVENTS.md`.
+- `CHANGELOG.md` at repo root.
+
+> **Stretch goal — deferred:** `deploy/arch/PKGBUILD` (AUR packaging) was
+> listed in the M5 file tree as a stretch goal.  It is **not** an M5 exit
+> criterion.  AUR packaging requires a separate AUR account and is deferred
+> to a post-V1 release task.  The `deploy/arch/` directory is intentionally
+> absent; it will be created when AUR submission is formally planned.
 
 **Exit criteria:** fresh Arch user can run 4 commands and have a running service; fresh macOS/Windows user can run `pipx install inventory && inventory run` and open the scan page; Docker user can run `docker compose up -d`.
 

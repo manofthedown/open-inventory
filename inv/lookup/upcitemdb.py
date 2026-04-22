@@ -13,9 +13,13 @@ Returns ``None`` on any miss or error — the chain continues uninterrupted.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from inv.lookup.base import ProviderResult
+
+logger = logging.getLogger(__name__)
 
 _API = "https://api.upcitemdb.com/prod/trial/lookup"
 
@@ -50,8 +54,19 @@ class UPCitemdbProvider:
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 resp = await client.get(_API, params={"upc": upc}, follow_redirects=True)
+                if resp.status_code == 429:
+                    # Rate-limit hit — log distinctly so operators know why the
+                    # chain fell through rather than silently treating it as a miss.
+                    logger.warning(
+                        "upcitemdb rate limit reached (HTTP 429) for UPC %s; "
+                        "skipping provider. The free tier allows ~100 lookups/day per IP.",
+                        upc,
+                    )
+                    return None
                 resp.raise_for_status()
                 data = resp.json()
+        except httpx.HTTPStatusError:
+            return None
         except Exception:
             return None
 

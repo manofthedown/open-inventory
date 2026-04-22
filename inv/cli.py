@@ -62,22 +62,32 @@ def run(
     """Run the development server."""
     import uvicorn
 
-    from inv.main import create_app
-
-    settings = get_settings()
-    app = create_app(settings)
-
     typer.echo(f"Starting open-inventory v{__version__}...")
     typer.echo(f"Listen: http://{host}:{port}")
     typer.echo(f"Scan page: http://{host}:{port}/scan")
 
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        reload=reload,
-        log_level=settings.log_level.lower(),
-    )
+    # When reload is enabled, uvicorn needs an import string (not an app object).
+    # Otherwise, pass the app directly for faster startup.
+    if reload:
+        uvicorn.run(
+            "inv.asgi:app",
+            host=host,
+            port=port,
+            reload=True,
+            log_level=get_settings().log_level.lower(),
+        )
+    else:
+        from inv.main import create_app
+
+        settings = get_settings()
+        app_instance = create_app(settings)
+        uvicorn.run(
+            app_instance,
+            host=host,
+            port=port,
+            reload=False,
+            log_level=settings.log_level.lower(),
+        )
 
 
 @app.command()
