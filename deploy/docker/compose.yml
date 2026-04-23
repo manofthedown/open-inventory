@@ -3,10 +3,8 @@ name: open-inventory
 # =============================================================================
 # open-inventory — Docker Compose configuration
 # =============================================================================
-# Quick start (build from source — works without a published release):
-#   git clone https://github.com/manofthedown/open-inventory.git
-#   cd open-inventory
-#   docker compose -f deploy/docker/compose.yml up -d --build
+# Quick start:
+#   docker compose -f deploy/docker/compose.yml up -d
 #   open http://127.0.0.1:8765/scan
 #
 # View logs:
@@ -18,22 +16,21 @@ name: open-inventory
 # Completely remove (including data volume — WARNING: deletes all inventory data):
 #   docker compose -f deploy/docker/compose.yml down -v
 #
-# --- Pre-built image (after a release tag is pushed to GHCR) ----------------
-# Once a versioned release exists, you can skip the build step by switching
-# to the pre-built image. Comment out the `build:` block and uncomment:
-#   image: ghcr.io/manofthedown/open-inventory:latest
+# --- Build from source (instead of pulling from GHCR) -----------------------
+# Comment out `image:` and uncomment the `build:` block below, then run:
+#   docker compose -f deploy/docker/compose.yml up -d --build
 # =============================================================================
 
 services:
   inventory:
-    # Build from source — default for pre-release / source checkouts.
-    # Switch to `image:` once a tagged release is available on GHCR.
-    build:
-      context: ../..
-      dockerfile: deploy/docker/Dockerfile
+    # Pre-built multi-arch image from GHCR (linux/amd64 + linux/arm64).
+    # Updated on every tagged release via the release.yml workflow.
+    image: ghcr.io/manofthedown/open-inventory:latest
 
-    # Pre-built image from GHCR (uncomment once a release tag exists):
-    # image: ghcr.io/manofthedown/open-inventory:latest
+    # Build from source instead of pulling (uncomment to use):
+    # build:
+    #   context: ../..
+    #   dockerfile: deploy/docker/Dockerfile
 
     container_name: open-inventory
 

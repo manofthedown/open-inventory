@@ -12,18 +12,18 @@ For full setup instructions see [`docs/QUICKSTART_DOCKER.md`](../../docs/QUICKST
 
 ---
 
-## Start (build from source)
+## Start
 
 From the **repo root**:
 
 ```bash
-docker compose -f deploy/docker/compose.yml up -d --build
+docker compose -f deploy/docker/compose.yml up -d
 ```
 
 Open <http://127.0.0.1:8765/scan>.
 
-`--build` is required until a tagged release is published to GHCR.  
-See [`docs/QUICKSTART_DOCKER.md`](../../docs/QUICKSTART_DOCKER.md) for the pre-built image path.
+Pulls `ghcr.io/manofthedown/open-inventory:latest` on first run.  
+See [`docs/QUICKSTART_DOCKER.md`](../../docs/QUICKSTART_DOCKER.md) for full details.
 
 ---
 
@@ -33,13 +33,13 @@ Run from the repo root:
 
 | Task | Command |
 |------|---------|
-| First start (build image) | `docker compose -f deploy/docker/compose.yml up -d --build` |
-| Start (image already built) | `docker compose -f deploy/docker/compose.yml up -d` |
+| Start | `docker compose -f deploy/docker/compose.yml up -d` |
 | View logs | `docker compose -f deploy/docker/compose.yml logs -f` |
 | Stop | `docker compose -f deploy/docker/compose.yml down` |
 | Restart | `docker compose -f deploy/docker/compose.yml restart inventory` |
-| Rebuild after code change | `docker compose -f deploy/docker/compose.yml up -d --build` |
+| Upgrade to latest release | `docker compose -f deploy/docker/compose.yml pull && docker compose -f deploy/docker/compose.yml up -d` |
 | Open a shell | `docker compose -f deploy/docker/compose.yml exec inventory bash` |
+| Build from source | `docker compose -f deploy/docker/compose.yml up -d --build` |
 | **Delete all data** | `docker compose -f deploy/docker/compose.yml down -v` ⚠️ |
 
 ---

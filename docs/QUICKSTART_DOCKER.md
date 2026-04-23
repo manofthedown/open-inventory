@@ -22,32 +22,25 @@ docker compose version
 
 ## Quick start
 
-Clone the repo and build the image from source:
-
 ```bash
 git clone https://github.com/manofthedown/open-inventory.git
 cd open-inventory
 
-docker compose -f deploy/docker/compose.yml up -d --build
+docker compose -f deploy/docker/compose.yml up -d
 ```
 
 Open <http://127.0.0.1:8765/scan>.
-
-> **Why `--build`?** The compose file builds the image from the local
-> `Dockerfile` by default. A pre-built image will be published to GHCR once
-> a versioned release is tagged — see [Using the pre-built image](#using-the-pre-built-image-after-a-release-is-tagged)
-> below. Until then, `--build` is required on first run.
 
 ---
 
 ## What happens on first start
 
-1. Docker builds the image from the local `Dockerfile` (builder + runtime stages, ~200 MB)
+1. Docker pulls the pre-built multi-arch image from GHCR (`ghcr.io/manofthedown/open-inventory:latest`)
 2. A named volume `open-inventory_inv-data` is created for the SQLite database
 3. `inventory init` runs inside the container (creates schema, seeds the default location)
 4. The server starts at `http://127.0.0.1:8765`
 
-Subsequent starts skip the build (the image is cached) and re-use the existing volume.
+Subsequent starts re-use the cached image and existing volume.
 
 ---
 
@@ -56,10 +49,7 @@ Subsequent starts skip the build (the image is cached) and re-use the existing v
 Run these from the **repo root** (where `deploy/docker/compose.yml` lives):
 
 ```bash
-# Start (build image if not yet built, then start detached)
-docker compose -f deploy/docker/compose.yml up -d --build
-
-# Start without rebuilding (faster — use after first build)
+# Start (pulls image on first run, then starts detached)
 docker compose -f deploy/docker/compose.yml up -d
 
 # View live logs
@@ -149,13 +139,11 @@ Set these in the `environment:` section of `compose.yml`:
 
 ## Upgrade
 
-While no tagged release exists, upgrading means pulling the latest source and
-rebuilding the image:
+Pull the latest image and recreate the container:
 
 ```bash
-cd open-inventory
-git pull
-docker compose -f deploy/docker/compose.yml up -d --build
+docker compose -f deploy/docker/compose.yml pull
+docker compose -f deploy/docker/compose.yml up -d
 ```
 
 Your data volume is untouched. `inventory init` runs on startup and applies
@@ -163,26 +151,14 @@ any new migrations automatically.
 
 ---
 
-## Using the pre-built image (after a release is tagged)
+## Build from source (instead of pulling from GHCR)
 
-Once a versioned release is published to GHCR, you can skip the build step
-entirely. Edit `deploy/docker/compose.yml`:
-
-```yaml
-# Comment out the build block:
-# build:
-#   context: ../..
-#   dockerfile: deploy/docker/Dockerfile
-
-# Uncomment the image line:
-image: ghcr.io/manofthedown/open-inventory:latest
-```
-
-Then:
+If you want to run a local code change without tagging a release, edit
+`deploy/docker/compose.yml` — comment out `image:` and uncomment the
+`build:` block, then:
 
 ```bash
-docker compose -f deploy/docker/compose.yml pull
-docker compose -f deploy/docker/compose.yml up -d
+docker compose -f deploy/docker/compose.yml up -d --build
 ```
 
 ---
