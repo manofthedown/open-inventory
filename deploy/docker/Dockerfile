@@ -43,7 +43,7 @@ FROM python:3.12-slim AS runtime
 LABEL org.opencontainers.image.title="open-inventory" \
       org.opencontainers.image.description="Lightweight offline-first barcode inventory system" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.source="https://github.com/anomalyco/open-inventory"
+      org.opencontainers.image.source="https://github.com/manofthedown/open-inventory"
 
 # Create a non-root user. UID/GID 1000 is the conventional first user.
 RUN groupadd --gid 1000 inv && \

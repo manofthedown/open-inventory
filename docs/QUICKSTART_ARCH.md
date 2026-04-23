@@ -60,7 +60,7 @@ Install and enable the service so it starts automatically at login:
 
 ```bash
 # Clone the repo if you don't already have it (only needed for the deploy script)
-git clone https://github.com/anomalyco/open-inventory.git
+git clone https://github.com/manofthedown/open-inventory.git
 cd open-inventory
 
 bash deploy/linux/install.sh

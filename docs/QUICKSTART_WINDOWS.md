@@ -72,7 +72,7 @@ Set up open-inventory to start automatically when you log in:
 
 ```powershell
 # Clone the repo if you don't already have it
-git clone https://github.com/anomalyco/open-inventory.git
+git clone https://github.com/manofthedown/open-inventory.git
 cd open-inventory
 
 powershell -ExecutionPolicy Bypass -File deploy\windows\install-task.ps1

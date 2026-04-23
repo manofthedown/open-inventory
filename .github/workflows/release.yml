@@ -14,7 +14,7 @@ name: Release
 #   - PyPI project must have a "GitHub Actions" trusted publisher configured
 #     (go to pypi.org → project → Publishing → Add a new publisher)
 #     Publisher settings:
-#       Owner: anomalyco
+#       Owner: manofthedown
 #       Repository: open-inventory
 #       Workflow name: release.yml
 #       Environment: pypi  (matches the `environment:` key below)

@@ -156,7 +156,7 @@ $Task = New-ScheduledTask `
     -Trigger $Trigger `
     -Settings $Settings `
     -Principal $Principal `
-    -Description 'open-inventory barcode inventory server (https://github.com/anomalyco/open-inventory)'
+    -Description 'open-inventory barcode inventory server (https://github.com/manofthedown/open-inventory)'
 
 Register-ScheduledTask -TaskName $TaskName -InputObject $Task | Out-Null
 Write-Ok "Task '$TaskName' registered."

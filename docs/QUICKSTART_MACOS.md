@@ -60,7 +60,7 @@ Press `Ctrl+C` to stop.
 Install the agent so open-inventory starts automatically at login:
 
 ```bash
-git clone https://github.com/anomalyco/open-inventory.git
+git clone https://github.com/manofthedown/open-inventory.git
 cd open-inventory
 
 bash deploy/macos/install.sh

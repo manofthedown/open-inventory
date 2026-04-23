@@ -84,7 +84,7 @@ Press `Ctrl+C` to stop.
 ## Run as a systemd user service (autostart)
 
 ```bash
-git clone https://github.com/anomalyco/open-inventory.git
+git clone https://github.com/manofthedown/open-inventory.git
 cd open-inventory
 
 bash deploy/linux/install.sh
